@@ -100,6 +100,8 @@ async def test_message_triggers_draft_generation(client, db, mock_claude_api):
     await asyncio.sleep(0.5)
 
     row = await db.execute("SELECT * FROM drafts")
-    draft = await row.fetchone()
-    # Draft may or may not exist depending on async timing
-    # The important thing is no crash occurred
+    drafts = await row.fetchall()
+    # Drafts may or may not exist depending on async timing
+    # If they exist, there should be 3 (variations)
+    if drafts:
+        assert len(drafts) == 3

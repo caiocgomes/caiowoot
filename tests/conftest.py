@@ -1,6 +1,6 @@
 import os
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -12,6 +12,7 @@ os.environ["EVOLUTION_API_KEY"] = "test-key"
 os.environ["EVOLUTION_INSTANCE"] = "test-instance"
 os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 os.environ["CLAUDE_MODEL"] = "claude-sonnet-4-20250514"
+os.environ["CLAUDE_HAIKU_MODEL"] = "claude-haiku-4-5-20251001"
 os.environ["DATABASE_PATH"] = ":memory:"
 
 from app.main import app
@@ -53,7 +54,8 @@ async def db():
          patch("app.routes.conversations.get_db", mock_get_db), \
          patch("app.routes.messages.get_db", mock_get_db), \
          patch("app.services.draft_engine.get_db", mock_get_db), \
-         patch("app.websocket_manager.manager") as mock_ws:
+         patch("app.websocket_manager.manager") as mock_ws, \
+         patch("app.services.draft_engine.save_prompt", return_value="testhash123"):
         mock_ws.broadcast = AsyncMock()
         yield conn
 
@@ -88,17 +90,25 @@ def mock_evolution_api():
 
 @pytest.fixture
 def mock_claude_api():
-    """Mock Claude API for draft generation."""
+    """Mock Claude API for draft generation (3 variations)."""
     with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [
-            AsyncMock(text=json.dumps({
-                "draft": "Oi! Tudo bem? Qual seu interesse em IA?",
-                "justification": "Primeira mensagem, qualificando o lead."
-            }))
-        ]
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        def make_response(draft_text="Oi! Tudo bem? Qual seu interesse em IA?", justification="Primeira mensagem, qualificando o lead."):
+            mock_response = AsyncMock()
+            mock_response.content = [
+                AsyncMock(text=json.dumps({
+                    "draft": draft_text,
+                    "justification": justification
+                }))
+            ]
+            return mock_response
+
+        mock_client.messages.create = AsyncMock(side_effect=[
+            make_response("Oi! Qual seu interesse em IA?", "Abordagem direta."),
+            make_response("E aí! Me conta, o que te trouxe aqui?", "Abordagem consultiva."),
+            make_response("Opa! Tudo bem? Em que posso ajudar?", "Abordagem casual."),
+        ])
         mock.return_value = mock_client
         yield mock_client
 

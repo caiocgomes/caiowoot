@@ -58,17 +58,26 @@ async def get_conversation(conversation_id: int):
         )
         messages = [dict(m) for m in await rows.fetchall()]
 
-        # Get pending draft
+        # Get pending drafts (full group)
         draft_row = await db.execute(
-            "SELECT * FROM drafts WHERE conversation_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+            "SELECT draft_group_id FROM drafts WHERE conversation_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
             (conversation_id,),
         )
         draft = await draft_row.fetchone()
+        pending_drafts = []
+        if draft and draft["draft_group_id"]:
+            group_rows = await db.execute(
+                "SELECT * FROM drafts WHERE draft_group_id = ? ORDER BY variation_index",
+                (draft["draft_group_id"],),
+            )
+            pending_drafts = [dict(d) for d in await group_rows.fetchall()]
+        elif draft:
+            pending_drafts = [dict(draft)]
 
         return {
             "conversation": dict(conv),
             "messages": messages,
-            "pending_draft": dict(draft) if draft else None,
+            "pending_drafts": pending_drafts,
         }
     finally:
         await db.close()

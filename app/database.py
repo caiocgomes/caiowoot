@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS messages (
     evolution_message_id TEXT UNIQUE,
     direction TEXT NOT NULL,
     content TEXT NOT NULL,
+    media_url TEXT,
+    media_type TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -31,6 +33,11 @@ CREATE TABLE IF NOT EXISTS drafts (
     draft_text TEXT NOT NULL,
     justification TEXT,
     status TEXT DEFAULT 'pending',
+    draft_group_id TEXT,
+    variation_index INTEGER,
+    approach TEXT,
+    prompt_hash TEXT,
+    operator_instruction TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,6 +48,11 @@ CREATE TABLE IF NOT EXISTS edit_pairs (
     original_draft TEXT NOT NULL,
     final_message TEXT NOT NULL,
     was_edited BOOLEAN NOT NULL,
+    operator_instruction TEXT,
+    all_drafts_json TEXT,
+    selected_draft_index INTEGER,
+    prompt_hash TEXT,
+    regeneration_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -57,6 +69,8 @@ async def get_db() -> aiosqlite.Connection:
 async def init_db():
     db_path = Path(settings.database_path)
     os.makedirs(db_path.parent, exist_ok=True)
+    os.makedirs(db_path.parent / "prompts", exist_ok=True)
+    os.makedirs(db_path.parent / "attachments", exist_ok=True)
     db = await get_db()
     try:
         await db.executescript(SCHEMA)

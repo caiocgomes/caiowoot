@@ -91,9 +91,9 @@ async def receive_webhook(request: Request):
         await db.commit()
 
         # Trigger draft generation asynchronously
-        from app.services.draft_engine import generate_draft
+        from app.services.draft_engine import generate_drafts
 
-        asyncio.create_task(generate_draft(conversation_id, msg_id))
+        asyncio.create_task(generate_drafts(conversation_id, msg_id))
 
         # Notify connected WebSocket clients
         from app.websocket_manager import manager
