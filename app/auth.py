@@ -22,22 +22,41 @@ def check_password(password: str) -> bool:
     return hmac.compare_digest(password, settings.app_password)
 
 
-def create_session_cookie() -> str:
+def create_session_cookie(operator: str | None = None) -> str:
     s = _get_serializer()
-    return s.dumps({"authenticated": True})
+    payload = {"authenticated": True}
+    if operator:
+        payload["operator"] = operator
+    return s.dumps(payload)
+
+
+def _load_session(cookie: str) -> dict | None:
+    if not cookie:
+        return None
+    s = _get_serializer()
+    try:
+        return s.loads(cookie, max_age=settings.session_max_age)
+    except (BadSignature, SignatureExpired):
+        return None
 
 
 def validate_session_cookie(cookie: str) -> bool:
     if not settings.app_password:
         return True  # no password = no auth required
-    if not cookie:
+    session = _load_session(cookie)
+    if not session:
         return False
-    s = _get_serializer()
-    try:
-        s.loads(cookie, max_age=settings.session_max_age)
-        return True
-    except (BadSignature, SignatureExpired):
+    if settings.operator_list and not session.get("operator"):
         return False
+    return True
+
+
+def get_operator_from_request(request) -> str | None:
+    cookie = request.cookies.get(COOKIE_NAME, "")
+    session = _load_session(cookie)
+    if not session:
+        return None
+    return session.get("operator")
 
 
 # --- Rate limiting ---
@@ -73,7 +92,7 @@ def reset_rate_limit():
 
 # --- Auth middleware ---
 
-ALLOWLIST_PATHS = {"/webhook", "/login", "/logout"}
+ALLOWLIST_PATHS = {"/webhook", "/login", "/logout", "/api/operators"}
 ALLOWLIST_PREFIXES = ("/login.html", "/manifest.json", "/sw.js", "/icon-")
 
 

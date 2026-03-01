@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     media_url TEXT,
     media_type TEXT,
+    sent_by TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -93,6 +94,8 @@ MIGRATIONS = [
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """),
+    ("sent_by_on_messages",
+     "ALTER TABLE messages ADD COLUMN sent_by TEXT"),
 ]
 
 _chroma_client = None

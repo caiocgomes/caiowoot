@@ -11,8 +11,15 @@ class Settings(BaseSettings):
     database_path: str = "data/caiowoot.db"
     app_password: str = ""
     session_max_age: int = 604800  # 7 days in seconds
+    operators: str = ""  # comma-separated list of operator names
 
     model_config = {"env_file": ".env"}
+
+    @property
+    def operator_list(self) -> list[str]:
+        if not self.operators:
+            return []
+        return [name.strip() for name in self.operators.split(",") if name.strip()]
 
 
 settings = Settings()

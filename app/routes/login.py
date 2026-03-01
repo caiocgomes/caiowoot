@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from app.auth import check_password, create_session_cookie, check_rate_limit, COOKIE_NAME
+from app.auth import check_password, create_session_cookie, check_rate_limit, get_operator_from_request, COOKIE_NAME
 from app.config import settings
 
 router = APIRouter()
@@ -9,6 +9,7 @@ router = APIRouter()
 
 class LoginRequest(BaseModel):
     password: str
+    operator: str | None = None
 
 
 @router.post("/login")
@@ -23,7 +24,13 @@ async def login(req: LoginRequest, request: Request, response: Response):
         response.status_code = 401
         return {"detail": "Wrong password."}
 
-    cookie = create_session_cookie()
+    operator_list = settings.operator_list
+    if operator_list:
+        if not req.operator or req.operator not in operator_list:
+            response.status_code = 400
+            return {"detail": "Selecione um operador."}
+
+    cookie = create_session_cookie(operator=req.operator if operator_list else None)
     response.set_cookie(
         key=COOKIE_NAME,
         value=cookie,
@@ -33,6 +40,17 @@ async def login(req: LoginRequest, request: Request, response: Response):
         secure=request.url.scheme == "https",
     )
     return {"status": "ok"}
+
+
+@router.get("/api/operators")
+async def get_operators():
+    return {"operators": settings.operator_list}
+
+
+@router.get("/api/me")
+async def get_me(request: Request):
+    operator = get_operator_from_request(request)
+    return {"operator": operator}
 
 
 @router.post("/logout")

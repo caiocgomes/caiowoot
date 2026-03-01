@@ -32,6 +32,7 @@ class TestSessionCookie:
         with patch("app.auth.settings") as s:
             s.app_password = "secret123"
             s.session_max_age = 3600
+            s.operator_list = []
             cookie = create_session_cookie()
             assert isinstance(cookie, str)
             assert validate_session_cookie(cookie) is True
@@ -40,6 +41,7 @@ class TestSessionCookie:
         with patch("app.auth.settings") as s:
             s.app_password = "secret123"
             s.session_max_age = 3600
+            s.operator_list = []
             cookie = create_session_cookie()
             assert validate_session_cookie(cookie + "tampered") is False
 
@@ -77,6 +79,7 @@ class TestSessionCookie:
         with patch("app.auth.settings") as s:
             s.app_password = "secret123"
             s.session_max_age = 3600
+            s.operator_list = []
             assert validate_session_cookie("") is False
             assert validate_session_cookie(None) is False
 

@@ -79,10 +79,15 @@ function renderConversationList(conversations) {
       ? formatTime(conv.last_message_at)
       : "";
 
+    const responder = conv.last_responder
+      ? `<div class="conv-responder">${escapeHtml(conv.last_responder)}</div>`
+      : "";
+
     div.innerHTML = `
       <span class="conv-time">${time}</span>
       <div class="conv-name">${escapeHtml(name)}</div>
       <div class="conv-preview">${escapeHtml(preview)}</div>
+      ${responder}
     `;
     list.appendChild(div);
   }

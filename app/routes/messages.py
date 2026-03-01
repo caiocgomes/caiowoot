@@ -7,6 +7,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from starlette.requests import Request
+
+from app.auth import get_operator_from_request
 from app.config import settings
 from app.database import get_db
 from app.models import RegenerateRequest
@@ -23,6 +26,7 @@ router = APIRouter()
 @router.post("/conversations/{conversation_id}/send")
 async def send_message(
     conversation_id: int,
+    request: Request,
     text: str = Form(...),
     draft_id: int | None = Form(None),
     draft_group_id: str | None = Form(None),
@@ -31,6 +35,7 @@ async def send_message(
     regeneration_count: int = Form(0),
     file: UploadFile | None = File(None),
 ):
+    operator = get_operator_from_request(request)
     db = await get_db()
     try:
         row = await db.execute(
@@ -63,8 +68,8 @@ async def send_message(
             raise HTTPException(status_code=502, detail=f"Evolution API error: {e}")
 
         cursor = await db.execute(
-            "INSERT INTO messages (conversation_id, direction, content, media_url, media_type) VALUES (?, 'outbound', ?, ?, ?)",
-            (conversation_id, text, media_url, media_type),
+            "INSERT INTO messages (conversation_id, direction, content, media_url, media_type, sent_by) VALUES (?, 'outbound', ?, ?, ?, ?)",
+            (conversation_id, text, media_url, media_type, operator),
         )
         msg_id = cursor.lastrowid
 

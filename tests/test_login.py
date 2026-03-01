@@ -17,6 +17,7 @@ async def test_login_correct_password(client, db):
          patch("app.routes.login.check_password", return_value=True), \
          patch("app.routes.login.create_session_cookie", return_value="valid-cookie"):
         s.session_max_age = 3600
+        s.operator_list = []
         resp = await client.post("/login", json={"password": "secret"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"

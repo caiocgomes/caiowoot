@@ -22,7 +22,11 @@ async def list_conversations():
                          WHERE m3.conversation_id = c.id AND m3.direction = 'outbound'),
                         '1970-01-01'
                     )
-                ) THEN 1 ELSE 0 END as has_unread
+                ) THEN 1 ELSE 0 END as has_unread,
+                (SELECT m5.sent_by FROM messages m5
+                 WHERE m5.conversation_id = c.id AND m5.direction = 'outbound' AND m5.sent_by IS NOT NULL
+                 ORDER BY m5.created_at DESC LIMIT 1
+                ) as last_responder
             FROM conversations c
             LEFT JOIN messages m ON m.id = (
                 SELECT m4.id FROM messages m4
