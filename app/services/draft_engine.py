@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import anthropic
@@ -55,6 +56,13 @@ A mensagem será enviada via WhatsApp. Use apenas formatação compatível:
 - Quebre linhas para facilitar leitura, mas sem parágrafos longos
 - Listas simples com - ou • quando necessário, sem aninhamento
 
+## Contexto temporal
+O prompt inclui timestamps nas mensagens recentes e o horário atual. Use isso para:
+- Se a última mensagem do cliente foi há mais de 1-2 horas, reconheça o atraso de forma natural (sem ser servil). Exemplo: "Desculpa a demora" ou "Voltando aqui"
+- Ajuste o cumprimento ao horário: "Bom dia" / "Boa tarde" / "Boa noite"
+- Se houve um gap grande na conversa, retome o contexto brevemente antes de continuar
+- Não mencione o atraso se foi menos de ~1 hora, isso é normal em WhatsApp
+
 ## Anexos
 Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode sugerir o envio de um arquivo junto com a mensagem. Sugira anexo quando o contexto indicar que o cliente está avançando na decisão de compra, pediu detalhes do programa, ou quando os exemplos anteriores mostram que o operador costuma enviar o arquivo nessa situação. Não sugira anexo se a conversa ainda está na fase de qualificação inicial.
 
@@ -93,7 +101,7 @@ def _build_rules_section(rules: list[dict]) -> str:
     return f"\n\n## Regras aprendidas\n{items}"
 
 
-async def _build_conversation_history(db, conversation_id: int) -> tuple[str, str]:
+async def _build_conversation_history(db, conversation_id: int) -> tuple[str, str, str | None]:
     row = await db.execute(
         "SELECT contact_name FROM conversations WHERE id = ?",
         (conversation_id,),
@@ -103,18 +111,39 @@ async def _build_conversation_history(db, conversation_id: int) -> tuple[str, st
     first_name = contact_name.split()[0] if contact_name.strip() else ""
 
     rows = await db.execute(
-        "SELECT direction, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
+        "SELECT direction, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
         (conversation_id,),
     )
     messages = await rows.fetchall()
 
+    now = datetime.now()
+    today = now.date()
+    total = len(messages)
+    timestamp_start = max(0, total - 10)
+
     history_lines = []
-    for msg in messages:
+    last_inbound_time = None
+    for i, msg in enumerate(messages):
         prefix = "Cliente" if msg["direction"] == "inbound" else "Caio"
-        history_lines.append(f"{prefix}: {msg['content']}")
+        msg_time = datetime.fromisoformat(msg["created_at"])
+
+        if msg["direction"] == "inbound":
+            last_inbound_time = msg_time
+
+        if i >= timestamp_start:
+            if msg_time.date() == today:
+                ts = f"[{msg_time.strftime('%H:%M')}] "
+            else:
+                ts = f"[{msg_time.strftime('%d/%m %H:%M')}] "
+        else:
+            ts = ""
+
+        history_lines.append(f"{ts}{prefix}: {msg['content']}")
     conversation_history = "\n".join(history_lines)
 
-    return conversation_history, first_name
+    last_inbound_iso = last_inbound_time.isoformat() if last_inbound_time else None
+
+    return conversation_history, first_name, last_inbound_iso
 
 
 async def _build_fewshot_from_retrieval(db, edit_pair_ids: list[int]) -> str:
@@ -180,7 +209,7 @@ async def _build_prompt_parts(
     operator_instruction: str | None = None,
     situation_summary: str | None = None,
 ):
-    conversation_history, first_name = await _build_conversation_history(db, conversation_id)
+    conversation_history, first_name, last_inbound_iso = await _build_conversation_history(db, conversation_id)
 
     # Generate situation summary if not provided
     if situation_summary is None:
@@ -229,6 +258,8 @@ async def _build_prompt_parts(
 
     client_section = f"\n\n## Cliente\nNome: {first_name}\n" if first_name else ""
 
+    temporal_section = _build_temporal_context(last_inbound_iso)
+
     user_content = f"""## Base de conhecimento dos cursos
 
 {knowledge}
@@ -241,10 +272,37 @@ async def _build_prompt_parts(
 ## Conversa atual
 
 {conversation_history}
+{temporal_section}
 
 Gere o draft de resposta para a última mensagem do cliente."""
 
     return user_content, situation_summary, rules_section
+
+
+def _build_temporal_context(last_inbound_iso: str | None) -> str:
+    now = datetime.now()
+    now_str = now.strftime("%H:%M (%d/%m)")
+
+    if not last_inbound_iso:
+        return f"\n\n## Contexto temporal\nAgora são {now_str}."
+
+    last_inbound = datetime.fromisoformat(last_inbound_iso)
+    delta = now - last_inbound
+    total_minutes = int(delta.total_seconds() / 60)
+
+    if total_minutes < 1:
+        elapsed = "agora mesmo"
+    elif total_minutes < 60:
+        elapsed = f"há {total_minutes}min"
+    else:
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        if minutes > 0:
+            elapsed = f"há {hours}h {minutes}min"
+        else:
+            elapsed = f"há {hours}h"
+
+    return f"\n\n## Contexto temporal\nAgora são {now_str}. Última mensagem do cliente foi {elapsed}."
 
 
 def _validate_suggested_attachment(suggested: str | None) -> str | None:
