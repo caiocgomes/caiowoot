@@ -19,5 +19,8 @@ attachments/
 # Misc
 hello.py
 
+# Claude Code
+.claude/
+
 # macOS
 .DS_Store
