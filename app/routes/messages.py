@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import RegenerateRequest
 from app.services.evolution import send_document_message, send_media_message, send_text_message
 from app.services.draft_engine import regenerate_draft
+from app.services.strategic_annotation import generate_annotation
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -87,9 +88,10 @@ async def send_message(
         )
 
         # Record edit pair if draft was used
+        edit_pair_id = None
         if draft_id:
             draft_row = await db.execute(
-                "SELECT draft_text, trigger_message_id, draft_group_id, prompt_hash, operator_instruction FROM drafts WHERE id = ? AND conversation_id = ?",
+                "SELECT draft_text, trigger_message_id, draft_group_id, prompt_hash, operator_instruction, situation_summary FROM drafts WHERE id = ? AND conversation_id = ?",
                 (draft_id, conversation_id),
             )
             draft = await draft_row.fetchone()
@@ -117,15 +119,18 @@ async def send_message(
                         for d in group_drafts
                     ], ensure_ascii=False)
 
-                await db.execute(
+                cursor = await db.execute(
                     """INSERT INTO edit_pairs
                        (conversation_id, customer_message, original_draft, final_message, was_edited,
-                        operator_instruction, all_drafts_json, selected_draft_index, prompt_hash, regeneration_count)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        operator_instruction, all_drafts_json, selected_draft_index, prompt_hash,
+                        regeneration_count, situation_summary)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (conversation_id, customer_message, draft["draft_text"], text, was_edited,
                      operator_instruction or draft["operator_instruction"],
-                     all_drafts_json, selected_draft_index, draft["prompt_hash"], regeneration_count),
+                     all_drafts_json, selected_draft_index, draft["prompt_hash"], regeneration_count,
+                     draft["situation_summary"]),
                 )
+                edit_pair_id = cursor.lastrowid
 
                 # Mark all drafts in group as sent/discarded
                 if group_id:
@@ -139,6 +144,19 @@ async def send_message(
                 )
 
         await db.commit()
+
+        # Fire-and-forget strategic annotation in background
+        if edit_pair_id and draft:
+            asyncio.create_task(
+                generate_annotation(
+                    edit_pair_id=edit_pair_id,
+                    customer_message=customer_message,
+                    original_draft=draft["draft_text"],
+                    final_message=text,
+                    was_edited=was_edited,
+                    situation_summary=draft["situation_summary"],
+                )
+            )
 
         await manager.broadcast(
             conversation_id,

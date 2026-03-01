@@ -53,7 +53,12 @@ async def db():
          patch("app.routes.webhook.get_db", mock_get_db), \
          patch("app.routes.conversations.get_db", mock_get_db), \
          patch("app.routes.messages.get_db", mock_get_db), \
+         patch("app.routes.review.get_db", mock_get_db), \
          patch("app.services.draft_engine.get_db", mock_get_db), \
+         patch("app.services.learned_rules.get_db", mock_get_db), \
+         patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value="Primeiro contato genérico.") as mock_summary, \
+         patch("app.services.draft_engine.retrieve_similar", return_value=[]) as mock_retrieval, \
+         patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]) as mock_rules, \
          patch("app.websocket_manager.manager") as mock_ws, \
          patch("app.services.draft_engine.save_prompt", return_value="testhash123"):
         mock_ws.broadcast = AsyncMock()

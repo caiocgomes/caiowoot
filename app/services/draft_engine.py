@@ -8,7 +8,10 @@ import anthropic
 from app.config import settings
 from app.database import get_db
 from app.services.knowledge import load_knowledge_base
+from app.services.learned_rules import get_active_rules
 from app.services.prompt_logger import save_prompt
+from app.services.situation_summary import generate_situation_summary
+from app.services.smart_retrieval import retrieve_similar
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +72,14 @@ def _parse_response(response_text: str) -> tuple[str, str]:
         return text, "Resposta não veio em JSON, usando texto direto"
 
 
-async def _build_prompt_parts(db, conversation_id: int, operator_instruction: str | None = None):
+def _build_rules_section(rules: list[dict]) -> str:
+    if not rules:
+        return ""
+    items = "\n".join(f"{i+1}. {r['rule_text']}" for i, r in enumerate(rules))
+    return f"\n\n## Regras aprendidas\n{items}"
+
+
+async def _build_conversation_history(db, conversation_id: int) -> tuple[str, str]:
     row = await db.execute(
         "SELECT contact_name FROM conversations WHERE id = ?",
         (conversation_id,),
@@ -90,30 +100,106 @@ async def _build_prompt_parts(db, conversation_id: int, operator_instruction: st
         history_lines.append(f"{prefix}: {msg['content']}")
     conversation_history = "\n".join(history_lines)
 
-    knowledge = load_knowledge_base()
+    return conversation_history, first_name
 
+
+async def _build_fewshot_from_retrieval(db, edit_pair_ids: list[int]) -> str:
+    if not edit_pair_ids:
+        return ""
+
+    placeholders = ",".join("?" * len(edit_pair_ids))
+    rows = await db.execute(
+        f"SELECT situation_summary, customer_message, original_draft, final_message, strategic_annotation FROM edit_pairs WHERE id IN ({placeholders})",
+        edit_pair_ids,
+    )
+    pairs = await rows.fetchall()
+
+    if not pairs:
+        return ""
+
+    examples = []
+    for pair in pairs:
+        example = f"Situação: \"{pair['situation_summary'] or 'N/A'}\"\n"
+        example += f"Cliente disse: \"{pair['customer_message']}\"\n"
+        example += f"IA propôs: \"{pair['original_draft']}\"\n"
+        example += f"Caio enviou: \"{pair['final_message']}\""
+        if pair["strategic_annotation"]:
+            example += f"\nPor quê: {pair['strategic_annotation']}"
+        examples.append(example)
+
+    return (
+        "\n\n## Exemplos de como o Caio responde (aprenda com o tom e as correções estratégicas)\n\n"
+        + "\n\n---\n\n".join(examples)
+    )
+
+
+async def _build_fewshot_fallback(db) -> str:
     rows = await db.execute(
         "SELECT customer_message, original_draft, final_message FROM edit_pairs ORDER BY created_at DESC LIMIT 10",
     )
     edit_pairs = await rows.fetchall()
 
-    few_shot_text = ""
-    if edit_pairs:
-        examples = []
-        for pair in reversed(list(edit_pairs)):
-            examples.append(
-                f"Cliente disse: \"{pair['customer_message']}\"\n"
-                f"IA propôs: \"{pair['original_draft']}\"\n"
-                f"Caio enviou: \"{pair['final_message']}\""
-            )
-        few_shot_text = (
-            "\n\n## Exemplos de como o Caio responde (aprenda com o tom e as correções)\n\n"
-            + "\n\n---\n\n".join(examples)
+    if not edit_pairs:
+        return ""
+
+    examples = []
+    for pair in reversed(list(edit_pairs)):
+        examples.append(
+            f"Cliente disse: \"{pair['customer_message']}\"\n"
+            f"IA propôs: \"{pair['original_draft']}\"\n"
+            f"Caio enviou: \"{pair['final_message']}\""
         )
+    return (
+        "\n\n## Exemplos de como o Caio responde (aprenda com o tom e as correções)\n\n"
+        + "\n\n---\n\n".join(examples)
+    )
+
+
+async def _build_prompt_parts(
+    db,
+    conversation_id: int,
+    operator_instruction: str | None = None,
+    situation_summary: str | None = None,
+):
+    conversation_history, first_name = await _build_conversation_history(db, conversation_id)
+
+    # Generate situation summary if not provided
+    if situation_summary is None:
+        try:
+            situation_summary = await generate_situation_summary(
+                conversation_history, contact_name=first_name
+            )
+        except Exception:
+            logger.exception("Failed to generate situation summary")
+            situation_summary = None
+
+    # Smart retrieval based on situation summary
+    few_shot_text = ""
+    if situation_summary:
+        try:
+            similar_ids = retrieve_similar(situation_summary, k=5)
+            if similar_ids:
+                few_shot_text = await _build_fewshot_from_retrieval(db, similar_ids)
+        except Exception:
+            logger.exception("Smart retrieval failed, falling back to chronological")
+
+    # Fallback to chronological if smart retrieval yielded nothing
+    if not few_shot_text:
+        few_shot_text = await _build_fewshot_fallback(db)
+
+    knowledge = load_knowledge_base()
+
+    # Load learned rules
+    rules = await get_active_rules()
+    rules_section = _build_rules_section(rules)
 
     instruction_text = ""
     if operator_instruction:
         instruction_text = f"\n\n## Instrução do operador\n{operator_instruction}"
+
+    summary_section = ""
+    if situation_summary:
+        summary_section = f"\n\n## Situação atual\n{situation_summary}"
 
     client_section = f"\n\n## Cliente\nNome: {first_name}\n" if first_name else ""
 
@@ -124,17 +210,18 @@ async def _build_prompt_parts(db, conversation_id: int, operator_instruction: st
 {few_shot_text}
 {instruction_text}
 {client_section}
+{summary_section}
 ## Conversa atual
 
 {conversation_history}
 
 Gere o draft de resposta para a última mensagem do cliente."""
 
-    return user_content
+    return user_content, situation_summary, rules_section
 
 
-async def _call_haiku(user_content: str, approach_modifier: str) -> tuple[str, str]:
-    system = SYSTEM_PROMPT + f"\n\n## Estilo desta variação\n{approach_modifier}"
+async def _call_haiku(user_content: str, approach_modifier: str, rules_section: str = "") -> tuple[str, str]:
+    system = SYSTEM_PROMPT + rules_section + f"\n\n## Estilo desta variação\n{approach_modifier}"
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
         model=settings.claude_haiku_model,
@@ -152,15 +239,17 @@ async def generate_drafts(
 ):
     db = await get_db()
     try:
-        user_content = await _build_prompt_parts(db, conversation_id, operator_instruction)
+        user_content, situation_summary, rules_section = await _build_prompt_parts(
+            db, conversation_id, operator_instruction
+        )
 
-        full_prompt = SYSTEM_PROMPT + "\n\n" + user_content
+        full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         draft_group_id = str(uuid.uuid4())
 
         tasks = [
-            _call_haiku(user_content, modifier)
+            _call_haiku(user_content, modifier, rules_section)
             for _, modifier in APPROACH_MODIFIERS
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -177,10 +266,12 @@ async def generate_drafts(
             cursor = await db.execute(
                 """INSERT INTO drafts
                    (conversation_id, trigger_message_id, draft_text, justification,
-                    draft_group_id, variation_index, approach, prompt_hash, operator_instruction)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    draft_group_id, variation_index, approach, prompt_hash, operator_instruction,
+                    situation_summary)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (conversation_id, trigger_message_id, draft_text, justification,
-                 draft_group_id, i, approach_name, prompt_hash, operator_instruction),
+                 draft_group_id, i, approach_name, prompt_hash, operator_instruction,
+                 situation_summary),
             )
             drafts.append({
                 "id": cursor.lastrowid,
@@ -221,13 +312,15 @@ async def regenerate_draft(
 ):
     db = await get_db()
     try:
-        user_content = await _build_prompt_parts(db, conversation_id, operator_instruction)
-        full_prompt = SYSTEM_PROMPT + "\n\n" + user_content
+        user_content, situation_summary, rules_section = await _build_prompt_parts(
+            db, conversation_id, operator_instruction
+        )
+        full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         if draft_index is not None:
             approach_name, modifier = APPROACH_MODIFIERS[draft_index]
-            draft_text, justification = await _call_haiku(user_content, modifier)
+            draft_text, justification = await _call_haiku(user_content, modifier, rules_section)
 
             row = await db.execute(
                 """SELECT id, draft_group_id FROM drafts
@@ -238,9 +331,9 @@ async def regenerate_draft(
             existing = await row.fetchone()
             if existing:
                 await db.execute(
-                    """UPDATE drafts SET draft_text = ?, justification = ?, prompt_hash = ?, operator_instruction = ?
+                    """UPDATE drafts SET draft_text = ?, justification = ?, prompt_hash = ?, operator_instruction = ?, situation_summary = ?
                        WHERE id = ?""",
-                    (draft_text, justification, prompt_hash, operator_instruction, existing["id"]),
+                    (draft_text, justification, prompt_hash, operator_instruction, situation_summary, existing["id"]),
                 )
                 draft_group_id = existing["draft_group_id"]
             await db.commit()
@@ -273,7 +366,7 @@ async def regenerate_draft(
                 (draft_group_id,),
             )
 
-            tasks = [_call_haiku(user_content, mod) for _, mod in APPROACH_MODIFIERS]
+            tasks = [_call_haiku(user_content, mod, rules_section) for _, mod in APPROACH_MODIFIERS]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             drafts = []
@@ -287,10 +380,12 @@ async def regenerate_draft(
                 cursor = await db.execute(
                     """INSERT INTO drafts
                        (conversation_id, trigger_message_id, draft_text, justification,
-                        draft_group_id, variation_index, approach, prompt_hash, operator_instruction)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        draft_group_id, variation_index, approach, prompt_hash, operator_instruction,
+                        situation_summary)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (conversation_id, trigger_message_id, draft_text, justification,
-                     draft_group_id, i, approach_name, prompt_hash, operator_instruction),
+                     draft_group_id, i, approach_name, prompt_hash, operator_instruction,
+                     situation_summary),
                 )
                 drafts.append({
                     "id": cursor.lastrowid, "conversation_id": conversation_id,

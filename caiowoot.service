@@ -1,0 +1,18 @@
+[Unit]
+Description=CaioWoot - WhatsApp Copilot
+After=network.target
+
+[Service]
+Type=simple
+User=caiowoot
+Group=caiowoot
+WorkingDirectory=/opt/caiowoot
+EnvironmentFile=/opt/caiowoot/.env
+ExecStart=/opt/caiowoot/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8002
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

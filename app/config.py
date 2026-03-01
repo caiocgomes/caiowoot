@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-4-20250514"
     claude_haiku_model: str = "claude-haiku-4-5-20251001"
     database_path: str = "data/caiowoot.db"
+    app_password: str = ""
+    session_max_age: int = 604800  # 7 days in seconds
 
     model_config = {"env_file": ".env"}
 

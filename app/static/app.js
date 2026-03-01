@@ -7,6 +7,16 @@ let regenerationCount = 0;
 let attachedFile = null;
 let ws = null;
 
+// --- Auth: intercept 401 responses ---
+const _origFetch = window.fetch;
+window.fetch = async (...args) => {
+  const res = await _origFetch(...args);
+  if (res.status === 401) {
+    window.location.href = "/login.html";
+  }
+  return res;
+};
+
 // --- WebSocket ---
 function connectWS() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -411,6 +421,145 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, maxH) + "px";
 }
 
+// --- Review / Learning ---
+let currentReviewItems = [];
+let currentReviewItemId = null;
+
+async function loadReviewItems() {
+  const res = await fetch("/review");
+  const data = await res.json();
+  currentReviewItems = data.annotations || [];
+  renderReviewStats(data.stats);
+  renderReviewList(data.annotations);
+}
+
+function renderReviewStats(stats) {
+  const el = document.getElementById("review-stats");
+  if (!stats || stats.total_pending === 0) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `
+    <div class="review-stat"><span class="review-stat-count">${stats.total_pending}</span> pendentes</div>
+    <div class="review-stat"><span class="review-stat-count">${stats.total_edited}</span> editadas</div>
+    <div class="review-stat"><span class="review-stat-count">${stats.total_confirmed}</span> confirmadas</div>
+  `;
+}
+
+function renderReviewList(annotations) {
+  const container = document.getElementById("review-items");
+  const emptyEl = document.getElementById("review-empty");
+  container.innerHTML = "";
+
+  if (!annotations || annotations.length === 0) {
+    emptyEl.style.display = "block";
+    return;
+  }
+  emptyEl.style.display = "none";
+
+  for (const ann of annotations) {
+    const div = document.createElement("div");
+    div.className = "review-item" + (ann.id === currentReviewItemId ? " active" : "");
+    div.onclick = () => openReviewItem(ann.id);
+
+    const badgeClass = ann.was_edited ? "edited" : "confirmed";
+    const badgeText = ann.was_edited ? "Editada" : "Confirmada";
+
+    div.innerHTML = `
+      <span class="review-item-badge ${badgeClass}">${badgeText}</span>
+      <div class="review-item-situation">${escapeHtml(ann.situation_summary || "Sem resumo")}</div>
+      <div class="review-item-msg">${escapeHtml(ann.customer_message || "")}</div>
+    `;
+    container.appendChild(div);
+  }
+}
+
+function openReviewItem(id) {
+  const ann = currentReviewItems.find(a => a.id === id);
+  if (!ann) return;
+  currentReviewItemId = id;
+
+  hideKnowledgePanels();
+  hideReviewDetail();
+  document.getElementById("review-detail").style.display = "flex";
+  document.getElementById("main-empty").style.display = "none";
+
+  document.getElementById("review-detail-situation").textContent =
+    ann.situation_summary || "Sem resumo de situação";
+  document.getElementById("review-detail-time").textContent =
+    ann.created_at ? formatTime(ann.created_at) : "";
+  document.getElementById("review-detail-customer").textContent =
+    ann.customer_message || "";
+  document.getElementById("review-detail-draft").textContent =
+    ann.original_draft || "";
+  document.getElementById("review-detail-final").textContent =
+    ann.final_message || "";
+  document.getElementById("review-detail-annotation").textContent =
+    ann.strategic_annotation || "";
+
+  // Update active state
+  document.querySelectorAll(".review-item").forEach(item => {
+    item.classList.toggle("active", currentReviewItems[Array.from(item.parentNode.children).indexOf(item)]?.id === id);
+  });
+}
+
+function hideReviewDetail() {
+  document.getElementById("review-detail").style.display = "none";
+}
+
+async function validateAnnotation() {
+  if (!currentReviewItemId) return;
+  const res = await fetch(`/review/${currentReviewItemId}/validate`, { method: "POST" });
+  if (res.ok) {
+    afterReviewAction();
+  }
+}
+
+async function rejectAnnotation() {
+  if (!currentReviewItemId) return;
+  const res = await fetch(`/review/${currentReviewItemId}/reject`, { method: "POST" });
+  if (res.ok) {
+    afterReviewAction();
+  }
+}
+
+function showPromoteModal() {
+  if (!currentReviewItemId) return;
+  const ann = currentReviewItems.find(a => a.id === currentReviewItemId);
+  if (!ann) return;
+  document.getElementById("promote-rule-input").value = ann.strategic_annotation || "";
+  document.getElementById("promote-modal").classList.add("open");
+}
+
+function closePromoteModal() {
+  document.getElementById("promote-modal").classList.remove("open");
+}
+
+async function confirmPromote() {
+  if (!currentReviewItemId) return;
+  const ruleText = document.getElementById("promote-rule-input").value.trim();
+  if (!ruleText) return;
+
+  const body = { rule_text: ruleText };
+  const res = await fetch(`/review/${currentReviewItemId}/promote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    closePromoteModal();
+    afterReviewAction();
+  }
+}
+
+function afterReviewAction() {
+  currentReviewItemId = null;
+  hideReviewDetail();
+  document.getElementById("main-empty").style.display = "flex";
+  document.getElementById("main-empty").textContent = "Anotação processada";
+  loadReviewItems();
+}
+
 // --- Knowledge Base ---
 let currentTab = "conversations";
 let currentDocName = null;
@@ -423,30 +572,39 @@ function switchTab(tab) {
 
   const convList = document.getElementById("conversation-list");
   const kbList = document.getElementById("knowledge-list");
+  const reviewList = document.getElementById("review-list");
+
+  // Hide all sidebar panels
+  convList.style.display = "none";
+  kbList.style.display = "none";
+  reviewList.style.display = "none";
+
+  // Hide all main panels
+  document.getElementById("chat-header").style.display = "none";
+  document.getElementById("messages").style.display = "none";
+  document.getElementById("compose").style.display = "none";
+  document.getElementById("main-empty").style.display = "none";
+  hideKnowledgePanels();
+  hideReviewDetail();
 
   if (tab === "conversations") {
     convList.style.display = "block";
-    kbList.style.display = "none";
-    hideKnowledgePanels();
-    // Restore chat view if a conversation was open
     if (currentConversationId) {
       document.getElementById("chat-header").style.display = "block";
       document.getElementById("messages").style.display = "flex";
       document.getElementById("compose").style.display = "block";
-      document.getElementById("main-empty").style.display = "none";
     } else {
       document.getElementById("main-empty").style.display = "flex";
+      document.getElementById("main-empty").textContent = "Selecione uma conversa";
     }
-  } else {
-    convList.style.display = "none";
+  } else if (tab === "knowledge") {
     kbList.style.display = "block";
-    // Hide chat panels but preserve state
-    document.getElementById("chat-header").style.display = "none";
-    document.getElementById("messages").style.display = "none";
-    document.getElementById("compose").style.display = "none";
-    document.getElementById("main-empty").style.display = "none";
-    hideKnowledgePanels();
     loadKnowledgeDocs();
+  } else if (tab === "review") {
+    reviewList.style.display = "block";
+    document.getElementById("main-empty").style.display = "flex";
+    document.getElementById("main-empty").textContent = "Selecione uma anotação para revisar";
+    loadReviewItems();
   }
 }
 
