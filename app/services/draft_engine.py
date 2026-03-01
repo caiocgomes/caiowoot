@@ -214,6 +214,7 @@ async def _build_prompt_parts(
     conversation_id: int,
     operator_instruction: str | None = None,
     situation_summary: str | None = None,
+    proactive: bool = False,
 ):
     conversation_history, first_name, last_inbound_iso = await _build_conversation_history(db, conversation_id)
 
@@ -266,6 +267,11 @@ async def _build_prompt_parts(
 
     temporal_section = _build_temporal_context(last_inbound_iso)
 
+    if proactive:
+        final_instruction = "A última mensagem da conversa foi enviada pelo Caio. Gere uma mensagem de continuação natural, retomando o contexto da conversa."
+    else:
+        final_instruction = "Gere o draft de resposta para a última mensagem do cliente."
+
     user_content = f"""## Base de conhecimento dos cursos
 
 {knowledge}
@@ -280,7 +286,7 @@ async def _build_prompt_parts(
 {conversation_history}
 {temporal_section}
 
-Gere o draft de resposta para a última mensagem do cliente."""
+{final_instruction}"""
 
     return user_content, situation_summary, rules_section
 
@@ -341,11 +347,12 @@ async def generate_drafts(
     conversation_id: int,
     trigger_message_id: int,
     operator_instruction: str | None = None,
+    proactive: bool = False,
 ):
     db = await get_db()
     try:
         user_content, situation_summary, rules_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction
+            db, conversation_id, operator_instruction, proactive=proactive
         )
 
         full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
@@ -416,11 +423,12 @@ async def regenerate_draft(
     trigger_message_id: int,
     draft_index: int | None = None,
     operator_instruction: str | None = None,
+    proactive: bool = False,
 ):
     db = await get_db()
     try:
         user_content, situation_summary, rules_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction
+            db, conversation_id, operator_instruction, proactive=proactive
         )
         full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)

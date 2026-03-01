@@ -210,3 +210,37 @@ async def regenerate(conversation_id: int, req: RegenerateRequest):
     )
 
     return {"status": "ok", "message": "Regeneration started"}
+
+
+@router.post("/conversations/{conversation_id}/suggest")
+async def suggest_followup(conversation_id: int):
+    db = await get_db()
+    try:
+        row = await db.execute(
+            "SELECT id FROM conversations WHERE id = ?",
+            (conversation_id,),
+        )
+        if not await row.fetchone():
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        row = await db.execute(
+            "SELECT id, direction FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1",
+            (conversation_id,),
+        )
+        last_msg = await row.fetchone()
+        if not last_msg:
+            raise HTTPException(status_code=409, detail="No messages in conversation")
+        if last_msg["direction"] != "outbound":
+            raise HTTPException(status_code=409, detail="Last message is not outbound")
+
+        last_msg_id = last_msg["id"]
+    finally:
+        await db.close()
+
+    from app.services.draft_engine import generate_drafts
+
+    asyncio.create_task(
+        generate_drafts(conversation_id, last_msg_id, proactive=True)
+    )
+
+    return {"status": "ok"}

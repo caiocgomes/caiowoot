@@ -57,6 +57,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 #draft-cards-container { display: none; }
 .draft-cards-row { display: flex; gap: 8px; align-items: stretch; }
 
+/* Suggest button */
+#suggest-btn { width: 100%; padding: 10px 16px; background: #fff; border: 1px dashed #25D366; border-radius: 8px; font-size: 14px; color: #25D366; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+#suggest-btn:hover { background: #f0faf0; }
+#suggest-btn:disabled { color: #999; border-color: #ccc; cursor: not-allowed; }
+
 /* Instruction bar */
 #instruction-bar { display: none; margin-bottom: 8px; display: none; }
 #instruction-bar .instruction-row { display: flex; gap: 8px; align-items: center; }
@@ -206,8 +211,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 @media (max-width: 767px) {
   /* Default mobile state: sidebar visible as full-width list, main hidden */
   #sidebar { width: 100%; border-right: none; }
-  #main { display: none; width: 100%; }
+  #main { display: none; width: 100%; min-height: 0; }
   #hamburger-btn { display: inline-block; }
+
+  /* Sticky chat header */
+  #chat-header { position: sticky; top: 0; z-index: 10; }
 
   /* When a conversation is selected: sidebar hidden, main visible */
   body.mobile-chat-active #sidebar { display: none; }
@@ -349,6 +357,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
   <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()">&#x2190;</button> <span id="chat-header-name"></span></div>
   <div id="messages"></div>
   <div id="compose">
+    <button id="suggest-btn" style="display:none;" onclick="requestSuggestion()">Sugerir resposta</button>
     <div id="draft-cards-container">
       <div class="draft-cards-row">
         <div id="draft-cards"></div>

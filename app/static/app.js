@@ -132,9 +132,16 @@ async function openConversation(id) {
   document.getElementById("draft-cards-container").style.display = "none";
   document.getElementById("instruction-bar").style.display = "none";
   document.getElementById("attachment-bar").style.display = "none";
+  document.getElementById("suggest-btn").style.display = "none";
 
   if (data.pending_drafts && data.pending_drafts.length > 0) {
     showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
+  } else {
+    // Show suggest button if last message is outbound
+    const msgs = data.messages;
+    if (msgs.length > 0 && msgs[msgs.length - 1].direction === "outbound") {
+      document.getElementById("suggest-btn").style.display = "block";
+    }
   }
 
   loadConversations();
@@ -157,6 +164,7 @@ function appendMessage(msg) {
 
 // --- Draft Variations ---
 function showDrafts(drafts, groupId) {
+  document.getElementById("suggest-btn").style.display = "none";
   currentDrafts = drafts;
   currentDraftGroupId = groupId;
   selectedDraftIndex = null;
@@ -880,6 +888,31 @@ async function createDoc() {
   } else {
     const err = await res.json();
     alert(`Erro ao criar: ${err.detail || "erro desconhecido"}`);
+  }
+}
+
+// --- Proactive Suggest ---
+async function requestSuggestion() {
+  if (!currentConversationId) return;
+  const btn = document.getElementById("suggest-btn");
+  btn.disabled = true;
+  btn.textContent = "Gerando sugestões...";
+
+  try {
+    const res = await fetch(`/conversations/${currentConversationId}/suggest`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(`Erro: ${err.detail || "erro desconhecido"}`);
+      btn.disabled = false;
+      btn.textContent = "Sugerir resposta";
+    }
+    // On success, drafts will arrive via WebSocket (drafts_ready event)
+    // which calls showDrafts() and hides the suggest button
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "Sugerir resposta";
   }
 }
 
