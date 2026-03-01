@@ -418,19 +418,29 @@ function escapeHtml(text) {
 }
 
 function formatTime(dateStr) {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
+  // DB timestamps are UTC; normalize so JS parses them correctly
+  const normalized =
+    dateStr.includes("+") || dateStr.includes("Z")
+      ? dateStr
+      : dateStr.replace(" ", "T") + "Z";
+  const date = new Date(normalized);
+  const tz = "America/Sao_Paulo";
+
+  const todayStr = new Date().toLocaleDateString("pt-BR", { timeZone: tz });
+  const dateStr2 = date.toLocaleDateString("pt-BR", { timeZone: tz });
+  const isToday = todayStr === dateStr2;
 
   if (isToday) {
     return date.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: tz,
     });
   }
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
+    timeZone: tz,
   });
 }
 
