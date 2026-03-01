@@ -27,6 +27,7 @@ Copiloto de vendas para WhatsApp com IA. Recebe mensagens de clientes via Evolut
 - **Few-shot learning**: edições do operador viram exemplos para futuras gerações
 - **Prompt logging**: prompts salvos em disco com hash SHA-256 para rastreabilidade e tuning
 - **Edit pairs**: registro completo de cada interação (draft original, mensagem final, se foi editada, qual variação escolhida)
+- **Identificação de operador**: após login, cada operador seleciona seu nome. Mensagens enviadas ficam marcadas com quem enviou, e a lista de conversas mostra quem respondeu por último
 
 ## Setup
 
@@ -52,6 +53,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 | `ANTHROPIC_API_KEY` | Chave da API Anthropic |
 | `CLAUDE_HAIKU_MODEL` | Modelo Haiku (default: claude-haiku-4-5-20251001) |
 | `DATABASE_PATH` | Caminho do SQLite (default: data/caiowoot.db) |
+| `APP_PASSWORD` | Senha de acesso à interface (vazio = sem auth) |
+| `OPERATORS` | Lista de operadores separados por vírgula (ex: `Caio,João,Vitória`). Se vazio, não pede seleção de operador |
 
 ## Testes
 
