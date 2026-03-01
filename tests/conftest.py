@@ -14,6 +14,7 @@ os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-key"
 os.environ["CLAUDE_MODEL"] = "claude-sonnet-4-20250514"
 os.environ["CLAUDE_HAIKU_MODEL"] = "claude-haiku-4-5-20251001"
 os.environ["DATABASE_PATH"] = ":memory:"
+os.environ["APP_PASSWORD"] = ""
 
 from app.main import app
 from app.database import get_db, init_db

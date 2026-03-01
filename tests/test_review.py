@@ -27,8 +27,12 @@ async def test_list_pending_annotations(client, db):
     data = resp.json()
     assert data["stats"]["total_pending"] == 2
     assert data["stats"]["total_edited"] == 1
-    assert data["stats"]["total_confirmed"] == 1
+    assert data["stats"]["total_accepted"] == 1
     assert len(data["annotations"]) == 2
+    assert "history_stats" in data
+    assert data["history_stats"]["total_validated"] == 0
+    assert data["history_stats"]["total_rejected"] == 0
+    assert data["history_stats"]["total_promoted"] == 0
 
 
 @pytest.mark.asyncio

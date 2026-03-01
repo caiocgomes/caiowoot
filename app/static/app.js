@@ -429,21 +429,31 @@ async function loadReviewItems() {
   const res = await fetch("/review");
   const data = await res.json();
   currentReviewItems = data.annotations || [];
-  renderReviewStats(data.stats);
+  renderReviewStats(data.stats, data.history_stats);
   renderReviewList(data.annotations);
 }
 
-function renderReviewStats(stats) {
+function renderReviewStats(stats, historyStats) {
   const el = document.getElementById("review-stats");
-  if (!stats || stats.total_pending === 0) {
-    el.innerHTML = "";
-    return;
+  let html = "";
+
+  if (stats && stats.total_pending > 0) {
+    html += `<div class="review-stats-row">
+      <div class="review-stat"><span class="review-stat-count">${stats.total_pending}</span> pendentes</div>
+      <div class="review-stat"><span class="review-stat-count">${stats.total_edited}</span> editadas</div>
+      <div class="review-stat"><span class="review-stat-count">${stats.total_accepted}</span> aceitas</div>
+    </div>`;
   }
-  el.innerHTML = `
-    <div class="review-stat"><span class="review-stat-count">${stats.total_pending}</span> pendentes</div>
-    <div class="review-stat"><span class="review-stat-count">${stats.total_edited}</span> editadas</div>
-    <div class="review-stat"><span class="review-stat-count">${stats.total_confirmed}</span> confirmadas</div>
-  `;
+
+  if (historyStats && (historyStats.total_validated > 0 || historyStats.total_rejected > 0 || historyStats.total_promoted > 0)) {
+    html += `<div class="review-stats-row history">
+      <div class="review-stat"><span class="review-stat-count">${historyStats.total_validated}</span> validadas</div>
+      <div class="review-stat"><span class="review-stat-count">${historyStats.total_rejected}</span> rejeitadas</div>
+      <div class="review-stat"><span class="review-stat-count">${historyStats.total_promoted}</span> regras</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
 }
 
 function renderReviewList(annotations) {
@@ -558,6 +568,98 @@ function afterReviewAction() {
   document.getElementById("main-empty").style.display = "flex";
   document.getElementById("main-empty").textContent = "Anotação processada";
   loadReviewItems();
+  loadRules();
+}
+
+// --- Rules ---
+let currentRules = [];
+let currentRuleId = null;
+
+async function loadRules() {
+  const res = await fetch("/rules");
+  const data = await res.json();
+  currentRules = data.rules || [];
+  renderRulesList(currentRules);
+}
+
+function renderRulesList(rules) {
+  const container = document.getElementById("rules-items");
+  const emptyEl = document.getElementById("rules-empty");
+  container.innerHTML = "";
+
+  if (!rules || rules.length === 0) {
+    emptyEl.style.display = "block";
+    return;
+  }
+  emptyEl.style.display = "none";
+
+  for (const rule of rules) {
+    const div = document.createElement("div");
+    div.className = "rule-item" + (rule.id === currentRuleId ? " active" : "") + (rule.is_active ? "" : " inactive");
+    div.onclick = () => openRuleDetail(rule.id);
+
+    const toggle = document.createElement("button");
+    toggle.className = "rule-toggle" + (rule.is_active ? " on" : "");
+    toggle.onclick = (e) => { e.stopPropagation(); toggleRule(rule.id); };
+
+    const text = document.createElement("span");
+    text.className = "rule-text-preview";
+    text.textContent = rule.rule_text;
+
+    div.appendChild(toggle);
+    div.appendChild(text);
+    container.appendChild(div);
+  }
+}
+
+function openRuleDetail(id) {
+  const rule = currentRules.find(r => r.id === id);
+  if (!rule) return;
+  currentRuleId = id;
+
+  hideKnowledgePanels();
+  hideReviewDetail();
+  hideRuleDetail();
+  document.getElementById("rule-detail").style.display = "flex";
+  document.getElementById("main-empty").style.display = "none";
+  document.getElementById("rule-edit-textarea").value = rule.rule_text;
+
+  renderRulesList(currentRules);
+}
+
+function hideRuleDetail() {
+  document.getElementById("rule-detail").style.display = "none";
+}
+
+async function toggleRule(id) {
+  await fetch(`/rules/${id}/toggle`, { method: "PATCH" });
+  await loadRules();
+}
+
+async function saveRule() {
+  if (!currentRuleId) return;
+  const text = document.getElementById("rule-edit-textarea").value.trim();
+  if (!text) return;
+
+  await fetch(`/rules/${currentRuleId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rule_text: text }),
+  });
+
+  currentRuleId = null;
+  hideRuleDetail();
+  document.getElementById("main-empty").style.display = "flex";
+  document.getElementById("main-empty").textContent = "Regra salva";
+  await loadRules();
+}
+
+function cancelRuleEdit() {
+  currentRuleId = null;
+  hideRuleDetail();
+  document.getElementById("main-empty").style.display = "flex";
+  document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
+  renderRulesList(currentRules);
 }
 
 // --- Knowledge Base ---
@@ -586,6 +688,7 @@ function switchTab(tab) {
   document.getElementById("main-empty").style.display = "none";
   hideKnowledgePanels();
   hideReviewDetail();
+  hideRuleDetail();
 
   if (tab === "conversations") {
     convList.style.display = "block";
@@ -603,8 +706,9 @@ function switchTab(tab) {
   } else if (tab === "review") {
     reviewList.style.display = "block";
     document.getElementById("main-empty").style.display = "flex";
-    document.getElementById("main-empty").textContent = "Selecione uma anotação para revisar";
+    document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
     loadReviewItems();
+    loadRules();
   }
 }
 

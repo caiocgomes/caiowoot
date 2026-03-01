@@ -123,7 +123,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
 /* Review panel (sidebar) */
 #review-list { flex: 1; overflow-y: auto; display: none; }
-#review-stats { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; display: flex; gap: 12px; }
+#review-stats { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
+.review-stats-row { display: flex; gap: 12px; }
+.review-stats-row.history { margin-top: 6px; font-size: 12px; color: #999; }
 .review-stat { display: flex; align-items: center; gap: 4px; }
 .review-stat-count { font-weight: 600; color: #333; }
 .review-item { padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
@@ -135,6 +137,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 .review-item-badge.edited { background: #fff3e0; color: #e65100; }
 .review-item-badge.confirmed { background: #e8f5e9; color: #2e7d32; }
 #review-empty { padding: 24px 16px; text-align: center; color: #999; font-size: 13px; }
+
+/* Rules section in sidebar */
+#rules-section-header { padding: 10px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #888; border-top: 1px solid #ddd; border-bottom: 1px solid #eee; background: #fafafa; }
+.rule-item { padding: 10px 16px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.rule-item:hover { background: #f0f0f0; }
+.rule-item.active { background: #e3f2fd; }
+.rule-item.inactive { opacity: 0.5; }
+.rule-toggle { width: 36px; height: 20px; border-radius: 10px; background: #ccc; border: none; cursor: pointer; position: relative; flex-shrink: 0; }
+.rule-toggle.on { background: #25D366; }
+.rule-toggle::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left 0.2s; }
+.rule-toggle.on::after { left: 18px; }
+.rule-text-preview { font-size: 13px; color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rules-empty { padding: 16px; text-align: center; color: #bbb; font-size: 12px; }
 
 /* Review detail (main area) */
 #review-detail { display: none; flex: 1; flex-direction: column; overflow: hidden; }
@@ -160,6 +175,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 .review-action-btn.reject:hover { background: #ffcdd2; }
 .review-action-btn.promote { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
 .review-action-btn.promote:hover { background: #bbdefb; }
+
+/* Rule detail (main area) */
+#rule-detail { display: none; flex: 1; flex-direction: column; }
+#rule-detail-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
+#rule-detail-header span { font-weight: 600; font-size: 15px; }
+#rule-detail-body { flex: 1; padding: 16px; }
+#rule-edit-textarea { width: 100%; min-height: 120px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; line-height: 1.5; }
+#rule-detail-actions { padding: 16px; border-top: 1px solid #ddd; background: #fff; display: flex; gap: 8px; }
 
 /* Promote modal */
 #promote-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
@@ -235,6 +258,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
     <div id="review-stats"></div>
     <div id="review-items"></div>
     <div id="review-empty" style="display:none;">Nenhuma anotação pendente.</div>
+    <div id="rules-section-header">Regras aprendidas</div>
+    <div id="rules-items"></div>
+    <div id="rules-empty" style="display:none;">Nenhuma regra criada.</div>
   </div>
 </div>
 <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
@@ -295,6 +321,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
       <button class="review-action-btn promote" onclick="showPromoteModal()">Promover a regra</button>
     </div>
   </div>
+  <div id="rule-detail">
+    <div id="rule-detail-header"><span>Regra</span></div>
+    <div id="rule-detail-body">
+      <textarea id="rule-edit-textarea"></textarea>
+    </div>
+    <div id="rule-detail-actions">
+      <button class="review-action-btn ok" onclick="saveRule()">Salvar</button>
+      <button class="review-action-btn" onclick="cancelRuleEdit()">Cancelar</button>
+    </div>
+  </div>
   <div id="promote-modal">
     <div id="promote-modal-content">
       <h3>Promover a regra</h3>
@@ -341,6 +377,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
 }
 </script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

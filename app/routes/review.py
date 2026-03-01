@@ -25,17 +25,34 @@ async def list_pending_annotations():
         )
         annotations = [dict(r) for r in await rows.fetchall()]
 
-        # Stats
+        # Pending stats
         total_pending = len(annotations)
         total_edited = sum(1 for a in annotations if a["was_edited"])
-        total_confirmed = total_pending - total_edited
+        total_accepted = total_pending - total_edited
+
+        # History stats
+        hist = await db.execute(
+            """SELECT
+                 SUM(CASE WHEN rejected = 0 THEN 1 ELSE 0 END) AS total_validated,
+                 SUM(CASE WHEN rejected = 1 THEN 1 ELSE 0 END) AS total_rejected
+               FROM edit_pairs
+               WHERE strategic_annotation IS NOT NULL AND validated = 1"""
+        )
+        hist_row = await hist.fetchone()
+        promoted = await db.execute("SELECT COUNT(*) as c FROM learned_rules")
+        promoted_row = await promoted.fetchone()
 
         return {
             "annotations": annotations,
             "stats": {
                 "total_pending": total_pending,
                 "total_edited": total_edited,
-                "total_confirmed": total_confirmed,
+                "total_accepted": total_accepted,
+            },
+            "history_stats": {
+                "total_validated": hist_row["total_validated"] or 0,
+                "total_rejected": hist_row["total_rejected"] or 0,
+                "total_promoted": promoted_row["c"] or 0,
             },
         }
     finally:
