@@ -14,7 +14,9 @@ wheels/
 
 # Data (database, prompts, attachments)
 data/
-attachments/
+
+# Known attachments (PDFs added manually on server, not tracked in git)
+knowledge/attachments/*.pdf
 
 # Misc
 hello.py

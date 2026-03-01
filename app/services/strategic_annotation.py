@@ -32,6 +32,7 @@ async def generate_annotation(
     final_message: str,
     was_edited: bool,
     situation_summary: str | None = None,
+    attachment_filename: str | None = None,
 ):
     try:
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -45,6 +46,8 @@ async def generate_annotation(
             user_content += f"Operador enviou (editado): {final_message}"
         else:
             user_content += f"Operador enviou (sem edição): {final_message}"
+        if attachment_filename:
+            user_content += f"\nOperador anexou: {attachment_filename}"
 
         response = await client.messages.create(
             model=settings.claude_haiku_model,

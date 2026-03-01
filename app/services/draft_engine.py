@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
+from pathlib import Path
 
 import anthropic
 
@@ -14,6 +15,14 @@ from app.services.situation_summary import generate_situation_summary
 from app.services.smart_retrieval import retrieve_similar
 
 logger = logging.getLogger(__name__)
+
+ATTACHMENTS_DIR = Path(__file__).resolve().parent.parent.parent / "knowledge" / "attachments"
+
+
+def list_known_attachments() -> list[str]:
+    if not ATTACHMENTS_DIR.exists():
+        return []
+    return sorted(f.name for f in ATTACHMENTS_DIR.iterdir() if f.is_file())
 
 SYSTEM_PROMPT = """Você é o Caio respondendo mensagens de clientes no WhatsApp sobre seus cursos de IA.
 
@@ -46,11 +55,15 @@ A mensagem será enviada via WhatsApp. Use apenas formatação compatível:
 - Quebre linhas para facilitar leitura, mas sem parágrafos longos
 - Listas simples com - ou • quando necessário, sem aninhamento
 
+## Anexos
+Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode sugerir o envio de um arquivo junto com a mensagem. Sugira anexo quando o contexto indicar que o cliente está avançando na decisão de compra, pediu detalhes do programa, ou quando os exemplos anteriores mostram que o operador costuma enviar o arquivo nessa situação. Não sugira anexo se a conversa ainda está na fase de qualificação inicial.
+
 ## Formato de resposta
 Responda SEMPRE em JSON com exatamente estes campos:
 {
   "draft": "texto da mensagem proposta para o cliente",
-  "justification": "1-2 frases explicando por que você escolheu essa abordagem (isso NÃO vai pro cliente, é só pro operador)"
+  "justification": "1-2 frases explicando por que você escolheu essa abordagem (isso NÃO vai pro cliente, é só pro operador)",
+  "suggested_attachment": "nome-do-arquivo.pdf ou null se não houver sugestão"
 }"""
 
 APPROACH_MODIFIERS = [
@@ -60,16 +73,17 @@ APPROACH_MODIFIERS = [
 ]
 
 
-def _parse_response(response_text: str) -> tuple[str, str]:
+def _parse_response(response_text: str) -> tuple[str, str, str | None]:
     text = response_text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1]
         text = text.rsplit("```", 1)[0].strip()
     try:
         parsed = json.loads(text)
-        return parsed.get("draft", text), parsed.get("justification", "")
+        suggested = parsed.get("suggested_attachment") or None
+        return parsed.get("draft", text), parsed.get("justification", ""), suggested
     except json.JSONDecodeError:
-        return text, "Resposta não veio em JSON, usando texto direto"
+        return text, "Resposta não veio em JSON, usando texto direto", None
 
 
 def _build_rules_section(rules: list[dict]) -> str:
@@ -109,7 +123,7 @@ async def _build_fewshot_from_retrieval(db, edit_pair_ids: list[int]) -> str:
 
     placeholders = ",".join("?" * len(edit_pair_ids))
     rows = await db.execute(
-        f"SELECT situation_summary, customer_message, original_draft, final_message, strategic_annotation FROM edit_pairs WHERE id IN ({placeholders})",
+        f"SELECT situation_summary, customer_message, original_draft, final_message, strategic_annotation, attachment_filename FROM edit_pairs WHERE id IN ({placeholders})",
         edit_pair_ids,
     )
     pairs = await rows.fetchall()
@@ -125,6 +139,8 @@ async def _build_fewshot_from_retrieval(db, edit_pair_ids: list[int]) -> str:
         example += f"Caio enviou: \"{pair['final_message']}\""
         if pair["strategic_annotation"]:
             example += f"\nPor quê: {pair['strategic_annotation']}"
+        if pair["attachment_filename"]:
+            example += f"\nAnexo enviado: {pair['attachment_filename']}"
         examples.append(example)
 
     return (
@@ -135,7 +151,7 @@ async def _build_fewshot_from_retrieval(db, edit_pair_ids: list[int]) -> str:
 
 async def _build_fewshot_fallback(db) -> str:
     rows = await db.execute(
-        "SELECT customer_message, original_draft, final_message FROM edit_pairs ORDER BY created_at DESC LIMIT 10",
+        "SELECT customer_message, original_draft, final_message, attachment_filename FROM edit_pairs ORDER BY created_at DESC LIMIT 10",
     )
     edit_pairs = await rows.fetchall()
 
@@ -144,11 +160,14 @@ async def _build_fewshot_fallback(db) -> str:
 
     examples = []
     for pair in reversed(list(edit_pairs)):
-        examples.append(
+        example = (
             f"Cliente disse: \"{pair['customer_message']}\"\n"
             f"IA propôs: \"{pair['original_draft']}\"\n"
             f"Caio enviou: \"{pair['final_message']}\""
         )
+        if pair["attachment_filename"]:
+            example += f"\nAnexo enviado: {pair['attachment_filename']}"
+        examples.append(example)
     return (
         "\n\n## Exemplos de como o Caio responde (aprenda com o tom e as correções)\n\n"
         + "\n\n---\n\n".join(examples)
@@ -193,6 +212,13 @@ async def _build_prompt_parts(
     rules = await get_active_rules()
     rules_section = _build_rules_section(rules)
 
+    # List known attachments
+    attachments = list_known_attachments()
+    attachments_section = ""
+    if attachments:
+        items = "\n".join(f"- {name}" for name in attachments)
+        attachments_section = f"\n\n## Anexos disponíveis\n{items}"
+
     instruction_text = ""
     if operator_instruction:
         instruction_text = f"\n\n## Instrução do operador\n{operator_instruction}"
@@ -208,6 +234,7 @@ async def _build_prompt_parts(
 {knowledge}
 
 {few_shot_text}
+{attachments_section}
 {instruction_text}
 {client_section}
 {summary_section}
@@ -220,7 +247,16 @@ Gere o draft de resposta para a última mensagem do cliente."""
     return user_content, situation_summary, rules_section
 
 
-async def _call_haiku(user_content: str, approach_modifier: str, rules_section: str = "") -> tuple[str, str]:
+def _validate_suggested_attachment(suggested: str | None) -> str | None:
+    if not suggested:
+        return None
+    file_path = ATTACHMENTS_DIR / suggested
+    if file_path.exists() and file_path.is_file():
+        return suggested
+    return None
+
+
+async def _call_haiku(user_content: str, approach_modifier: str, rules_section: str = "") -> tuple[str, str, str | None]:
     system = SYSTEM_PROMPT + rules_section + f"\n\n## Estilo desta variação\n{approach_modifier}"
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
@@ -229,7 +265,9 @@ async def _call_haiku(user_content: str, approach_modifier: str, rules_section: 
         system=system,
         messages=[{"role": "user", "content": user_content}],
     )
-    return _parse_response(response.content[0].text)
+    draft_text, justification, suggested = _parse_response(response.content[0].text)
+    suggested = _validate_suggested_attachment(suggested)
+    return draft_text, justification, suggested
 
 
 async def generate_drafts(
@@ -260,8 +298,9 @@ async def generate_drafts(
                 logger.error("Draft variation %d failed: %s", i, results[i])
                 draft_text = "(Erro ao gerar esta variação)"
                 justification = str(results[i])
+                suggested_attachment = None
             else:
-                draft_text, justification = results[i]
+                draft_text, justification, suggested_attachment = results[i]
 
             cursor = await db.execute(
                 """INSERT INTO drafts
@@ -283,6 +322,7 @@ async def generate_drafts(
                 "draft_group_id": draft_group_id,
                 "variation_index": i,
                 "approach": approach_name,
+                "suggested_attachment": suggested_attachment,
             })
 
         await db.commit()
@@ -320,7 +360,7 @@ async def regenerate_draft(
 
         if draft_index is not None:
             approach_name, modifier = APPROACH_MODIFIERS[draft_index]
-            draft_text, justification = await _call_haiku(user_content, modifier, rules_section)
+            draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, rules_section)
 
             row = await db.execute(
                 """SELECT id, draft_group_id FROM drafts
@@ -349,6 +389,7 @@ async def regenerate_draft(
                 "draft_text": d["draft_text"], "justification": d["justification"],
                 "status": d["status"], "draft_group_id": d["draft_group_id"],
                 "variation_index": d["variation_index"], "approach": d["approach"],
+                "suggested_attachment": suggested_attachment if d["variation_index"] == draft_index else None,
             } for d in all_drafts]
 
         else:
@@ -374,8 +415,9 @@ async def regenerate_draft(
                 if isinstance(results[i], Exception):
                     draft_text = "(Erro ao gerar esta variação)"
                     justification = str(results[i])
+                    suggested_attachment = None
                 else:
-                    draft_text, justification = results[i]
+                    draft_text, justification, suggested_attachment = results[i]
 
                 cursor = await db.execute(
                     """INSERT INTO drafts
@@ -393,6 +435,7 @@ async def regenerate_draft(
                     "draft_text": draft_text, "justification": justification,
                     "status": "pending", "draft_group_id": draft_group_id,
                     "variation_index": i, "approach": approach_name,
+                    "suggested_attachment": suggested_attachment,
                 })
 
             await db.commit()

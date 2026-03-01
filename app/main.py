@@ -8,7 +8,7 @@ from starlette.requests import Request
 
 from app.auth import AuthMiddleware, validate_session_cookie, COOKIE_NAME
 from app.database import init_db
-from app.routes import conversations, knowledge, login, messages, review, rules, webhook
+from app.routes import attachments, conversations, knowledge, login, messages, review, rules, webhook
 from app.websocket_manager import manager
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +41,7 @@ app.include_router(messages.router)
 app.include_router(knowledge.router)
 app.include_router(rules.router)
 app.include_router(review.router)
+app.include_router(attachments.router)
 
 
 @app.websocket("/ws")

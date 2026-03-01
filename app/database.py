@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS edit_pairs (
     strategic_annotation TEXT,
     validated BOOLEAN DEFAULT 0,
     rejected BOOLEAN DEFAULT 0,
+    attachment_filename TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -96,6 +97,8 @@ MIGRATIONS = [
     """),
     ("sent_by_on_messages",
      "ALTER TABLE messages ADD COLUMN sent_by TEXT"),
+    ("attachment_filename_on_edit_pairs",
+     "ALTER TABLE edit_pairs ADD COLUMN attachment_filename TEXT"),
 ]
 
 _chroma_client = None

@@ -205,6 +205,28 @@ function showDrafts(drafts, groupId) {
 
     card.appendChild(header);
     card.appendChild(text);
+
+    // Show attachment suggestion if present
+    if (draft.suggested_attachment) {
+      const attachSuggestion = document.createElement("div");
+      attachSuggestion.className = "draft-attachment-suggestion";
+
+      const attachLabel = document.createElement("span");
+      attachLabel.textContent = `\uD83D\uDCCE ${draft.suggested_attachment}`;
+
+      const attachBtn = document.createElement("button");
+      attachBtn.textContent = "Anexar";
+      attachBtn.className = "draft-attach-btn";
+      attachBtn.onclick = (e) => {
+        e.stopPropagation();
+        loadSuggestedAttachment(draft.suggested_attachment);
+      };
+
+      attachSuggestion.appendChild(attachLabel);
+      attachSuggestion.appendChild(attachBtn);
+      card.appendChild(attachSuggestion);
+    }
+
     card.onclick = () => selectDraft(i);
     cardsEl.appendChild(card);
   }
@@ -314,6 +336,19 @@ function removeAttachment() {
   attachedFile = null;
   document.getElementById("attach-file").value = "";
   document.getElementById("attachment-bar").style.display = "none";
+}
+
+async function loadSuggestedAttachment(filename) {
+  try {
+    const res = await fetch(`/api/attachments/${encodeURIComponent(filename)}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    attachedFile = new File([blob], filename, { type: blob.type });
+    document.getElementById("attachment-name").textContent = `\uD83D\uDCCE ${filename}`;
+    document.getElementById("attachment-bar").style.display = "block";
+  } catch (e) {
+    console.error("Failed to load suggested attachment:", e);
+  }
 }
 
 // --- Send ---

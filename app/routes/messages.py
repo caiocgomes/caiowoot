@@ -124,16 +124,19 @@ async def send_message(
                         for d in group_drafts
                     ], ensure_ascii=False)
 
+                # Extract attachment filename if operator sent a file
+                attachment_filename = file.filename if (file and file.filename and media_type) else None
+
                 cursor = await db.execute(
                     """INSERT INTO edit_pairs
                        (conversation_id, customer_message, original_draft, final_message, was_edited,
                         operator_instruction, all_drafts_json, selected_draft_index, prompt_hash,
-                        regeneration_count, situation_summary)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        regeneration_count, situation_summary, attachment_filename)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (conversation_id, customer_message, draft["draft_text"], text, was_edited,
                      operator_instruction or draft["operator_instruction"],
                      all_drafts_json, selected_draft_index, draft["prompt_hash"], regeneration_count,
-                     draft["situation_summary"]),
+                     draft["situation_summary"], attachment_filename),
                 )
                 edit_pair_id = cursor.lastrowid
 
@@ -160,6 +163,7 @@ async def send_message(
                     final_message=text,
                     was_edited=was_edited,
                     situation_summary=draft["situation_summary"],
+                    attachment_filename=attachment_filename,
                 )
             )
 
