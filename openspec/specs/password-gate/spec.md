@@ -16,7 +16,7 @@ The system SHALL require a shared password (configured via environment variable 
 - **THEN** the authentication middleware SHALL be disabled and all routes SHALL be accessible without login
 
 ### Requirement: Maintain session via signed cookie
-The system SHALL issue a signed cookie (using `itsdangerous` `URLSafeTimedSerializer`) upon successful login. The cookie SHALL have: `HttpOnly` flag set, `SameSite=Strict`, `Secure` flag when not in development, configurable max age via `SESSION_MAX_AGE` env var (default 7 days).
+The system SHALL issue a signed cookie (using `itsdangerous` `URLSafeTimedSerializer`) upon successful login. The cookie SHALL have: `HttpOnly` flag set, `SameSite=Strict`, `Secure` flag when not in development, configurable max age via `SESSION_MAX_AGE` env var (default 7 days). The cookie payload SHALL include the operator name when operators are configured: `{"authenticated": True, "operator": "<name>"}`.
 
 #### Scenario: Valid session cookie on request
 - **WHEN** a request includes a valid, non-expired session cookie
@@ -29,6 +29,10 @@ The system SHALL issue a signed cookie (using `itsdangerous` `URLSafeTimedSerial
 #### Scenario: Tampered session cookie
 - **WHEN** a request includes a cookie with an invalid signature
 - **THEN** the system SHALL reject the request and clear the cookie
+
+#### Scenario: Valid cookie without operator field when operators are configured
+- **WHEN** a request includes a valid session cookie without the `operator` field AND `OPERATORS` is configured
+- **THEN** the system SHALL treat the session as invalid and redirect to the login page
 
 ### Requirement: Protect all routes except allowlist
 The system SHALL intercept all HTTP requests with an authentication middleware. The following routes SHALL be exempt (allowlist): `POST /webhook`, `POST /login`, `GET /login.html`, static assets needed for the login page. All other routes SHALL require a valid session.
