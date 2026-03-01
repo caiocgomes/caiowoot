@@ -34,6 +34,14 @@ SYSTEM_PROMPT = """Você é o Caio respondendo mensagens de clientes no WhatsApp
 - Se o cliente perguntar algo que você não sabe, diga que vai verificar
 - Nunca invente informações sobre os cursos que não estejam na base de conhecimento
 - Se for a primeira mensagem, foque em entender o que a pessoa precisa antes de vender
+- Se souber o nome do cliente, use-o ocasionalmente de forma natural. Não repita o nome em toda mensagem
+
+## Formatação WhatsApp
+A mensagem será enviada via WhatsApp. Use apenas formatação compatível:
+- *negrito* (asteriscos), _itálico_ (underscores), ~tachado~ (til)
+- Não use markdown, HTML, links clicáveis formatados ou cabeçalhos
+- Quebre linhas para facilitar leitura, mas sem parágrafos longos
+- Listas simples com - ou • quando necessário, sem aninhamento
 
 ## Formato de resposta
 Responda SEMPRE em JSON com exatamente estes campos:
@@ -62,6 +70,14 @@ def _parse_response(response_text: str) -> tuple[str, str]:
 
 
 async def _build_prompt_parts(db, conversation_id: int, operator_instruction: str | None = None):
+    row = await db.execute(
+        "SELECT contact_name FROM conversations WHERE id = ?",
+        (conversation_id,),
+    )
+    conv = await row.fetchone()
+    contact_name = (conv["contact_name"] or "") if conv else ""
+    first_name = contact_name.split()[0] if contact_name.strip() else ""
+
     rows = await db.execute(
         "SELECT direction, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
         (conversation_id,),
@@ -99,13 +115,15 @@ async def _build_prompt_parts(db, conversation_id: int, operator_instruction: st
     if operator_instruction:
         instruction_text = f"\n\n## Instrução do operador\n{operator_instruction}"
 
+    client_section = f"\n\n## Cliente\nNome: {first_name}\n" if first_name else ""
+
     user_content = f"""## Base de conhecimento dos cursos
 
 {knowledge}
 
 {few_shot_text}
 {instruction_text}
-
+{client_section}
 ## Conversa atual
 
 {conversation_history}

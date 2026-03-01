@@ -7,7 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from app.database import init_db
-from app.routes import conversations, messages, webhook
+from app.routes import conversations, knowledge, messages, webhook
 from app.websocket_manager import manager
 
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +35,7 @@ app.add_middleware(NoCacheStaticMiddleware)
 app.include_router(webhook.router)
 app.include_router(conversations.router)
 app.include_router(messages.router)
+app.include_router(knowledge.router)
 
 
 @app.websocket("/ws")

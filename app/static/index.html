@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CaioWoot</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; display: flex; background: #f5f5f5; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100dvh; display: flex; background: #f5f5f5; }
 
 /* Sidebar */
 #sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
@@ -46,6 +51,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 #regen-all-btn { background: none; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 12px; white-space: nowrap; align-self: center; }
 #regen-all-btn:hover { background: #f0f0f0; }
 #draft-cards-container { display: none; }
+.draft-cards-row { display: flex; gap: 8px; align-items: stretch; }
 
 /* Instruction bar */
 #instruction-bar { display: none; margin-bottom: 8px; display: none; }
@@ -60,7 +66,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
 /* Draft area */
 #draft-area { display: flex; gap: 8px; align-items: flex-end; }
-#draft-input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 120px; max-height: 300px; }
+#draft-input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 200px; max-height: 500px; }
 
 /* Attachment */
 #attachment-bar { display: none; margin-bottom: 8px; padding: 6px 10px; background: #f0f0f0; border-radius: 6px; font-size: 13px; }
@@ -74,20 +80,141 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 #attach-btn { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; cursor: pointer; }
 #attach-btn:hover { background: #f0f0f0; }
 #attach-file { display: none; }
+
+/* Sidebar tabs */
+#sidebar-tabs { display: flex; border-bottom: 1px solid #ddd; }
+.sidebar-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; border: none; border-bottom: 2px solid transparent; color: #888; }
+.sidebar-tab.active { color: #333; border-bottom-color: #25D366; }
+.sidebar-tab:hover { background: #f8f8f8; }
+
+/* Knowledge panel */
+#knowledge-list { flex: 1; overflow-y: auto; display: none; }
+.kb-item { padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
+.kb-item:hover { background: #f0f0f0; }
+.kb-item.active { background: #e3f2fd; }
+.kb-item-name { font-weight: 600; font-size: 14px; }
+.kb-item-time { font-size: 11px; color: #999; float: right; }
+#kb-new-btn { display: block; width: calc(100% - 32px); margin: 12px 16px; padding: 10px; background: #fff; border: 1px dashed #ccc; border-radius: 8px; font-size: 13px; cursor: pointer; color: #666; text-align: center; }
+#kb-new-btn:hover { background: #f8f8f8; border-color: #999; }
+
+/* Knowledge editor (main area) */
+#kb-editor { display: none; flex: 1; flex-direction: column; }
+#kb-editor-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
+#kb-editor-name { font-weight: 600; font-size: 16px; flex: 1; }
+#kb-editor-actions { display: flex; gap: 8px; }
+#kb-editor-actions button { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; }
+#kb-save-btn { background: #25D366 !important; color: #fff !important; border-color: #25D366 !important; font-weight: 600; }
+#kb-save-btn:hover { background: #1da851 !important; }
+#kb-delete-btn { color: #c00; }
+#kb-delete-btn:hover { background: #fee; }
+#kb-editor-body { flex: 1; padding: 16px; overflow: hidden; display: flex; }
+#kb-editor-textarea { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 14px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; resize: none; }
+
+/* Knowledge new doc form */
+#kb-new-form { display: none; flex: 1; flex-direction: column; }
+#kb-new-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
+#kb-new-name-input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
+#kb-new-actions { display: flex; gap: 8px; }
+#kb-new-actions button { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; }
+#kb-create-btn { background: #25D366 !important; color: #fff !important; border-color: #25D366 !important; font-weight: 600; }
+#kb-cancel-btn { color: #666; }
+#kb-new-body { flex: 1; padding: 16px; overflow: hidden; display: flex; }
+#kb-new-textarea { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 14px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; resize: none; }
+
+/* Hamburger button - hidden on desktop */
+#hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; margin-right: 8px; }
+
+/* Sidebar backdrop */
+#sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+
+/* Mobile */
+@media (max-width: 767px) {
+  /* Default mobile state: sidebar visible as full-width list, main hidden */
+  #sidebar { width: 100%; border-right: none; }
+  #main { display: none; width: 100%; }
+  #hamburger-btn { display: inline-block; }
+
+  /* When a conversation is selected: sidebar hidden, main visible */
+  body.mobile-chat-active #sidebar { display: none; }
+  body.mobile-chat-active #main { display: flex; }
+
+  /* Overlay mode: sidebar over chat (for switching conversations) */
+  body.mobile-chat-active #sidebar.open { display: flex; position: fixed; top: 0; left: 0; bottom: 0; width: 85vw; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.2); }
+  body.mobile-chat-active #sidebar-backdrop.open { display: block; }
+
+  .msg { max-width: 90%; }
+
+  /* Draft cards as compact pills on mobile */
+  #draft-cards { flex-direction: row; gap: 6px; margin-bottom: 6px; }
+  .draft-cards-row { flex-direction: row; align-items: center; }
+  .draft-card { flex: 1; max-height: none; overflow: hidden; padding: 8px 10px; text-align: center; border-radius: 20px; }
+  .draft-card-text { display: none; }
+  .draft-card-header { margin-bottom: 0; justify-content: center; }
+  .draft-card-actions { display: none; }
+  .draft-card-label { font-size: 12px; }
+  .draft-card.selected { border-color: #25D366; background: #e8f5e9; }
+  #regen-all-btn { padding: 8px; font-size: 16px; border-radius: 20px; min-height: 44px; }
+
+  /* Justification compact */
+  #justification { font-size: 11px; padding: 4px 8px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Instruction bar compact */
+  #instruction-bar { margin-bottom: 4px; }
+
+  /* Textarea full width */
+  #draft-input { min-height: 100px; width: 100%; }
+  #draft-area { flex-direction: column; gap: 6px; }
+  #btn-group { flex-direction: row; justify-content: flex-end; width: 100%; gap: 8px; }
+  #send-btn, #attach-btn { min-height: 44px; }
+  #compose { padding: 8px 10px; }
+}
 </style>
 </head>
 <body>
 <div id="sidebar">
   <div id="sidebar-header">CaioWoot</div>
+  <div id="sidebar-tabs">
+    <button class="sidebar-tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversas</button>
+    <button class="sidebar-tab" data-tab="knowledge" onclick="switchTab('knowledge')">Conhecimento</button>
+  </div>
   <div id="conversation-list"></div>
+  <div id="knowledge-list">
+    <button id="kb-new-btn" onclick="showNewDocForm()">+ Novo documento</button>
+    <div id="kb-docs"></div>
+  </div>
 </div>
+<div id="sidebar-backdrop" onclick="closeSidebar()"></div>
 <div id="main">
   <div id="main-empty">Selecione uma conversa</div>
-  <div id="chat-header"></div>
+  <div id="kb-editor">
+    <div id="kb-editor-header">
+      <span id="kb-editor-name"></span>
+      <div id="kb-editor-actions">
+        <button id="kb-delete-btn" onclick="deleteDoc()">Deletar</button>
+        <button id="kb-save-btn" onclick="saveDoc()">Salvar</button>
+      </div>
+    </div>
+    <div id="kb-editor-body">
+      <textarea id="kb-editor-textarea" placeholder="Conteúdo do documento..."></textarea>
+    </div>
+  </div>
+  <div id="kb-new-form">
+    <div id="kb-new-header">
+      <input id="kb-new-name-input" type="text" placeholder="nome-do-documento (letras, números, hífens)">
+      <div id="kb-new-actions">
+        <button id="kb-cancel-btn" onclick="cancelNewDoc()">Cancelar</button>
+        <button id="kb-create-btn" onclick="createDoc()">Criar</button>
+      </div>
+    </div>
+    <div id="kb-new-body">
+      <textarea id="kb-new-textarea" placeholder="Conteúdo do documento..."></textarea>
+    </div>
+  </div>
+  <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()">&#x2190;</button> <span id="chat-header-name"></span></div>
   <div id="messages"></div>
   <div id="compose">
     <div id="draft-cards-container">
-      <div style="display:flex; gap:8px; align-items:stretch;">
+      <div class="draft-cards-row">
         <div id="draft-cards"></div>
         <button id="regen-all-btn" title="Regenerar todas">&#x1F504; Todas</button>
       </div>
@@ -113,6 +240,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
     </div>
   </div>
 </div>
-<script src="app.js?v=4"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js");
+}
+</script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

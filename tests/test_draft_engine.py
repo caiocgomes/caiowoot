@@ -139,6 +139,45 @@ async def test_cold_start_no_fewshot(db, mock_claude_api):
 
 
 @pytest.mark.asyncio
+async def test_first_name_included_in_prompt(db, mock_claude_api):
+    """Primeiro nome do cliente aparece no prompt quando contact_name existe."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name) VALUES ('5511999999999', 'Maria Silva')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Oi')"
+    )
+    await db.commit()
+
+    await generate_drafts(1, 1)
+
+    call_kwargs = mock_claude_api.messages.create.call_args_list[0].kwargs
+    user_content = call_kwargs["messages"][0]["content"]
+    assert "## Cliente" in user_content
+    assert "Nome: Maria" in user_content
+    # Não deve incluir sobrenome
+    assert "Maria Silva" not in user_content
+
+
+@pytest.mark.asyncio
+async def test_no_name_section_when_contact_name_empty(db, mock_claude_api):
+    """Sem contact_name, prompt não contém seção de nome."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Oi')"
+    )
+    await db.commit()
+
+    await generate_drafts(1, 1)
+
+    call_kwargs = mock_claude_api.messages.create.call_args_list[0].kwargs
+    user_content = call_kwargs["messages"][0]["content"]
+    assert "## Cliente" not in user_content
+
+
+@pytest.mark.asyncio
 async def test_max_10_fewshot_examples(db, mock_claude_api):
     """Máximo de 10 few-shot examples."""
     await db.execute(

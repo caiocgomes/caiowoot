@@ -75,7 +75,7 @@ Cultura data-driven, governança de dados, data mesh, de análise a decisão (st
 
 ## Comparativos
 
-- **vs. MBA:** MBA custa 30-60K e não ensina causalidade. CDO cobre mais profundidade técnica por R$4.000/ano.
+- **vs. MBA:** MBA custa 30-60K e não ensina causalidade. CDO cobre mais profundidade técnica
 - **vs. Bootcamps de 3 meses:** Rasos. CDO tem centenas de aulas com profundidade em cada tópico.
 - **vs. Alura/plataformas genéricas:** Volume sem profundidade analítica. CDO tem módulos únicos como Inferência Causal (52 aulas) e Estatística Bayesiana (50 aulas) que nenhuma dessas plataformas oferece.
 

@@ -59,7 +59,7 @@ function renderConversationList(conversations) {
     div.className = "conv-item" +
       (conv.id === currentConversationId ? " active" : "") +
       (conv.has_unread ? " unread" : "");
-    div.onclick = () => openConversation(conv.id);
+    div.onclick = () => { openConversation(conv.id); closeSidebar(); };
 
     const name = conv.contact_name || conv.phone_number;
     const preview = conv.last_message
@@ -97,8 +97,10 @@ async function openConversation(id) {
   document.getElementById("messages").style.flexDirection = "column";
   document.getElementById("compose").style.display = "block";
 
+  if (isMobile()) document.body.classList.add("mobile-chat-active");
+
   const conv = data.conversation;
-  document.getElementById("chat-header").textContent =
+  document.getElementById("chat-header-name").textContent =
     conv.contact_name || conv.phone_number;
 
   const messagesEl = document.getElementById("messages");
@@ -195,11 +197,9 @@ function showDrafts(drafts, groupId) {
   container.style.display = "block";
   document.getElementById("instruction-bar").style.display = "block";
 
-  // Show justification from first draft
-  if (drafts[0] && drafts[0].justification) {
-    const justEl = document.getElementById("justification");
-    justEl.textContent = `IA: ${drafts[0].justification}`;
-    justEl.style.display = "block";
+  // Auto-select first draft (on mobile, pills don't show text so this is essential)
+  if (drafts.length > 0) {
+    selectDraft(0);
   }
 }
 
@@ -384,10 +384,191 @@ function formatTime(dateStr) {
   });
 }
 
+// --- Sidebar toggle (mobile) ---
+function isMobile() {
+  return window.innerWidth < 768;
+}
+
+function toggleSidebar() {
+  if (isMobile() && document.body.classList.contains("mobile-chat-active")) {
+    // In chat view: go back to conversation list
+    document.body.classList.remove("mobile-chat-active");
+  } else {
+    document.getElementById("sidebar").classList.toggle("open");
+    document.getElementById("sidebar-backdrop").classList.toggle("open");
+  }
+}
+
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  document.getElementById("sidebar-backdrop").classList.remove("open");
+}
+
 // --- Auto-resize textarea ---
 function autoResize(el) {
+  var maxH = isMobile() ? window.innerHeight * 0.4 : 500;
   el.style.height = "auto";
-  el.style.height = Math.min(el.scrollHeight, 300) + "px";
+  el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+}
+
+// --- Knowledge Base ---
+let currentTab = "conversations";
+let currentDocName = null;
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".sidebar-tab").forEach(t => {
+    t.classList.toggle("active", t.dataset.tab === tab);
+  });
+
+  const convList = document.getElementById("conversation-list");
+  const kbList = document.getElementById("knowledge-list");
+
+  if (tab === "conversations") {
+    convList.style.display = "block";
+    kbList.style.display = "none";
+    hideKnowledgePanels();
+    // Restore chat view if a conversation was open
+    if (currentConversationId) {
+      document.getElementById("chat-header").style.display = "block";
+      document.getElementById("messages").style.display = "flex";
+      document.getElementById("compose").style.display = "block";
+      document.getElementById("main-empty").style.display = "none";
+    } else {
+      document.getElementById("main-empty").style.display = "flex";
+    }
+  } else {
+    convList.style.display = "none";
+    kbList.style.display = "block";
+    // Hide chat panels but preserve state
+    document.getElementById("chat-header").style.display = "none";
+    document.getElementById("messages").style.display = "none";
+    document.getElementById("compose").style.display = "none";
+    document.getElementById("main-empty").style.display = "none";
+    hideKnowledgePanels();
+    loadKnowledgeDocs();
+  }
+}
+
+function hideKnowledgePanels() {
+  document.getElementById("kb-editor").style.display = "none";
+  document.getElementById("kb-new-form").style.display = "none";
+}
+
+async function loadKnowledgeDocs() {
+  const res = await fetch("/knowledge");
+  const docs = await res.json();
+  const container = document.getElementById("kb-docs");
+  container.innerHTML = "";
+
+  for (const doc of docs) {
+    const div = document.createElement("div");
+    div.className = "kb-item" + (doc.name === currentDocName ? " active" : "");
+    div.onclick = () => openDoc(doc.name);
+
+    const time = formatTime(doc.modified_at);
+    div.innerHTML = `
+      <span class="kb-item-time">${time}</span>
+      <div class="kb-item-name">${escapeHtml(doc.name)}</div>
+    `;
+    container.appendChild(div);
+  }
+}
+
+async function openDoc(name) {
+  const res = await fetch(`/knowledge/${encodeURIComponent(name)}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  currentDocName = name;
+
+  hideKnowledgePanels();
+  document.getElementById("kb-editor").style.display = "flex";
+  document.getElementById("kb-editor-name").textContent = name;
+  document.getElementById("kb-editor-textarea").value = data.content;
+  document.getElementById("main-empty").style.display = "none";
+
+  // Update active state in list
+  document.querySelectorAll(".kb-item").forEach(item => {
+    item.classList.toggle("active", item.querySelector(".kb-item-name").textContent === name);
+  });
+}
+
+async function saveDoc() {
+  if (!currentDocName) return;
+  const content = document.getElementById("kb-editor-textarea").value;
+  const res = await fetch(`/knowledge/${encodeURIComponent(currentDocName)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (res.ok) {
+    loadKnowledgeDocs();
+  } else {
+    const err = await res.json();
+    alert(`Erro ao salvar: ${err.detail || "erro desconhecido"}`);
+  }
+}
+
+async function deleteDoc() {
+  if (!currentDocName) return;
+  if (!confirm(`Deletar "${currentDocName}"?`)) return;
+
+  const res = await fetch(`/knowledge/${encodeURIComponent(currentDocName)}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    currentDocName = null;
+    hideKnowledgePanels();
+    document.getElementById("main-empty").style.display = "flex";
+    loadKnowledgeDocs();
+  } else {
+    const err = await res.json();
+    alert(`Erro ao deletar: ${err.detail || "erro desconhecido"}`);
+  }
+}
+
+function showNewDocForm() {
+  hideKnowledgePanels();
+  document.getElementById("kb-new-form").style.display = "flex";
+  document.getElementById("kb-new-name-input").value = "";
+  document.getElementById("kb-new-textarea").value = "";
+  document.getElementById("main-empty").style.display = "none";
+  document.getElementById("kb-new-name-input").focus();
+}
+
+function cancelNewDoc() {
+  hideKnowledgePanels();
+  if (!currentDocName && !currentConversationId) {
+    document.getElementById("main-empty").style.display = "flex";
+  }
+}
+
+async function createDoc() {
+  const name = document.getElementById("kb-new-name-input").value.trim();
+  const content = document.getElementById("kb-new-textarea").value;
+
+  if (!name) {
+    alert("Nome do documento é obrigatório");
+    return;
+  }
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    alert("Nome inválido. Use apenas letras minúsculas, números e hífens.");
+    return;
+  }
+
+  const res = await fetch("/knowledge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, content }),
+  });
+
+  if (res.ok) {
+    await loadKnowledgeDocs();
+    openDoc(name);
+  } else {
+    const err = await res.json();
+    alert(`Erro ao criar: ${err.detail || "erro desconhecido"}`);
+  }
 }
 
 // --- Init ---
