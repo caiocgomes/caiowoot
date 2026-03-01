@@ -7,7 +7,7 @@ from pathlib import Path
 
 import anthropic
 
-from app.config import settings
+from app.config import now_local, settings
 from app.database import get_db
 from app.services.knowledge import load_knowledge_base
 from app.services.learned_rules import get_active_rules
@@ -116,7 +116,8 @@ async def _build_conversation_history(db, conversation_id: int) -> tuple[str, st
     )
     messages = await rows.fetchall()
 
-    now = datetime.now()
+    now = now_local()
+    tz = now.tzinfo
     today = now.date()
     total = len(messages)
     timestamp_start = max(0, total - 10)
@@ -126,6 +127,11 @@ async def _build_conversation_history(db, conversation_id: int) -> tuple[str, st
     for i, msg in enumerate(messages):
         prefix = "Cliente" if msg["direction"] == "inbound" else "Caio"
         msg_time = datetime.fromisoformat(msg["created_at"])
+        if msg_time.tzinfo is None:
+            from datetime import timezone as _tz
+            msg_time = msg_time.replace(tzinfo=_tz.utc).astimezone(tz)
+        else:
+            msg_time = msg_time.astimezone(tz)
 
         if msg["direction"] == "inbound":
             last_inbound_time = msg_time
@@ -280,13 +286,16 @@ Gere o draft de resposta para a última mensagem do cliente."""
 
 
 def _build_temporal_context(last_inbound_iso: str | None) -> str:
-    now = datetime.now()
+    now = now_local()
     now_str = now.strftime("%H:%M (%d/%m)")
 
     if not last_inbound_iso:
         return f"\n\n## Contexto temporal\nAgora são {now_str}."
 
     last_inbound = datetime.fromisoformat(last_inbound_iso)
+    if last_inbound.tzinfo is None:
+        from datetime import timezone as _tz
+        last_inbound = last_inbound.replace(tzinfo=_tz.utc).astimezone(now.tzinfo)
     delta = now - last_inbound
     total_minutes = int(delta.total_seconds() / 60)
 

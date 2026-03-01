@@ -1,13 +1,13 @@
 ## MODIFIED Requirements
 
 ### Requirement: Generate response drafts using Claude API
-The system SHALL generate a draft response for each incoming customer message by calling the Claude API with a structured prompt containing: system instructions (tone, sales posture), active learned rules, knowledge base content, list of available attachments, situation summary, semantically similar few-shot examples from past edits (retrieved via ChromaDB) with attachment information when present, conversation history, and operator instruction (if any).
+The system SHALL generate a draft response for each incoming customer message by calling the Claude API with a structured prompt containing: system instructions (tone, sales posture, temporal awareness), active learned rules, knowledge base content, list of available attachments, situation summary, semantically similar few-shot examples from past edits (retrieved via ChromaDB) with attachment information when present, conversation history with timezone-aware timestamps on recent messages, temporal context in the configured timezone (current time, client wait time), and operator instruction (if any).
 
 #### Scenario: Draft generation for a new message
 - **WHEN** the draft engine is invoked for a conversation with a new customer message
 - **THEN** the system SHALL first generate a situation summary via Haiku
 - **THEN** the system SHALL retrieve up to 5 semantically similar edit pairs from ChromaDB using the situation summary
-- **THEN** the system SHALL send a prompt to Claude API containing: system prompt with active learned rules, knowledge base content, available attachments list, situation summary, retrieved few-shot examples (with strategic annotations and attachment info when available), full conversation history, and operator instruction
+- **THEN** the system SHALL send a prompt to Claude API containing: system prompt with active learned rules, knowledge base content, available attachments list, situation summary, retrieved few-shot examples (with strategic annotations and attachment info when available), conversation history with timestamps on the last 10 messages, temporal context section, and operator instruction
 - **THEN** the response SHALL contain the draft text, a short justification, and optionally a suggested attachment filename
 
 #### Scenario: Draft for first message in conversation
@@ -28,6 +28,42 @@ The system SHALL generate a draft response for each incoming customer message by
 - **WHEN** `knowledge/attachments/` is empty
 - **THEN** the prompt SHALL NOT include the "Anexos disponíveis" section
 - **THEN** the draft SHALL NOT include `suggested_attachment`
+
+#### Scenario: Conversation history includes timestamps on recent messages
+- **WHEN** the conversation has more than 10 messages
+- **THEN** messages older than the last 10 SHALL be formatted as `Cliente: texto` or `Caio: texto` without timestamps
+- **THEN** the last 10 messages SHALL be formatted as `[HH:MM] Cliente: texto` for messages from today, or `[DD/MM HH:MM] Cliente: texto` for messages from previous days
+
+#### Scenario: Conversation history with 10 or fewer messages
+- **WHEN** the conversation has 10 or fewer messages
+- **THEN** all messages SHALL include timestamps in the same format
+
+#### Scenario: Temporal context section included in prompt
+- **WHEN** the draft engine builds the prompt
+- **THEN** the prompt SHALL include a temporal context section after the conversation history containing: the current time formatted as `HH:MM (DD/MM)`, and the elapsed time since the last inbound message from the client
+
+#### Scenario: Significant response delay
+- **WHEN** the elapsed time since the last client message exceeds 1 hour
+- **THEN** the temporal context section SHALL note the delay explicitly (e.g., "Última mensagem do cliente foi há 3h 15min")
+
+#### Scenario: Recent client message
+- **WHEN** the elapsed time since the last client message is under 1 hour
+- **THEN** the temporal context section SHALL note the time simply (e.g., "Última mensagem do cliente foi há 12min")
+
+#### Scenario: Temporal context uses configured timezone
+- **WHEN** the draft engine builds temporal context for the prompt
+- **THEN** the current time SHALL be obtained using the timezone configured in `Settings.timezone` (default: `America/Sao_Paulo`)
+- **THEN** the "Agora são" timestamp SHALL reflect the configured timezone
+- **THEN** the elapsed time calculation ("há Xh Ymin") SHALL compare the current timezone-aware time against the last inbound message timestamp converted to the same timezone
+
+#### Scenario: Conversation history timestamps use configured timezone
+- **WHEN** the draft engine formats timestamps for the last 10 messages in conversation history
+- **THEN** each timestamp SHALL be displayed in the configured timezone
+- **THEN** the "today" check (HH:MM vs DD/MM HH:MM format) SHALL use the current date in the configured timezone
+
+#### Scenario: Greeting adjustment respects timezone
+- **WHEN** the LLM receives the temporal context section
+- **THEN** the "Agora são" time SHALL correctly reflect São Paulo local time so that greetings ("Bom dia", "Boa tarde", "Boa noite") are appropriate for the operator's timezone
 
 ### Requirement: Use few-shot examples from edit history
 The system SHALL select few-shot examples from stored edit pairs by querying ChromaDB for situation summaries most similar to the current situation summary. When no edit history exists, the system SHALL operate with zero-shot using only the system prompt, learned rules, and knowledge base.

@@ -1,14 +1,25 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.config import now_local
 from app.services.draft_engine import (
     _build_conversation_history,
     _build_temporal_context,
     generate_drafts,
 )
+
+SP = ZoneInfo("America/Sao_Paulo")
+
+
+def _utc_iso(dt: datetime) -> str:
+    """Convert to UTC naive ISO (matches CURRENT_TIMESTAMP behavior)."""
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat()
 
 
 @pytest.mark.asyncio
@@ -17,9 +28,9 @@ async def test_timestamps_on_last_10_messages_only(db):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
+    now = now_local()
     for i in range(15):
-        ts = (now - timedelta(minutes=15 - i)).isoformat()
+        ts = _utc_iso(now - timedelta(minutes=15 - i))
         await db.execute(
             "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, ?, 'inbound', ?, ?)",
             (f"msg-{i}", f"mensagem {i}", ts),
@@ -44,8 +55,8 @@ async def test_today_messages_format_hhmm(db):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
-    ts = (now - timedelta(minutes=5)).isoformat()
+    now = now_local()
+    ts = _utc_iso(now - timedelta(minutes=5))
     await db.execute(
         "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, 'msg-1', 'inbound', 'Oi', ?)",
         (ts,),
@@ -64,8 +75,8 @@ async def test_previous_day_messages_format_ddmm_hhmm(db):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    yesterday = datetime.now() - timedelta(days=1)
-    ts = yesterday.isoformat()
+    yesterday = now_local() - timedelta(days=1)
+    ts = _utc_iso(yesterday)
     await db.execute(
         "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, 'msg-1', 'inbound', 'Oi', ?)",
         (ts,),
@@ -83,9 +94,9 @@ async def test_all_messages_get_timestamps_when_10_or_fewer(db):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
+    now = now_local()
     for i in range(5):
-        ts = (now - timedelta(minutes=5 - i)).isoformat()
+        ts = _utc_iso(now - timedelta(minutes=5 - i))
         await db.execute(
             "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, ?, 'inbound', ?, ?)",
             (f"msg-{i}", f"mensagem {i}", ts),
@@ -101,7 +112,7 @@ async def test_all_messages_get_timestamps_when_10_or_fewer(db):
 
 def test_temporal_context_delay_over_1h():
     """Atraso > 1h mostra horas e minutos."""
-    three_hours_ago = (datetime.now() - timedelta(hours=3, minutes=15)).isoformat()
+    three_hours_ago = (now_local() - timedelta(hours=3, minutes=15)).isoformat()
     result = _build_temporal_context(three_hours_ago)
     assert "3h 15min" in result
     assert "Agora são" in result
@@ -109,7 +120,7 @@ def test_temporal_context_delay_over_1h():
 
 def test_temporal_context_delay_under_1h():
     """Atraso < 1h mostra apenas minutos, sem horas."""
-    twelve_min_ago = (datetime.now() - timedelta(minutes=12)).isoformat()
+    twelve_min_ago = (now_local() - timedelta(minutes=12)).isoformat()
     result = _build_temporal_context(twelve_min_ago)
     assert "12min" in result
     # Should not contain hour format like "Xh"
@@ -127,7 +138,7 @@ def test_temporal_context_no_inbound():
 
 def test_temporal_context_exact_hours():
     """Atraso de horas exatas sem minutos sobressalentes."""
-    two_hours_ago = (datetime.now() - timedelta(hours=2)).isoformat()
+    two_hours_ago = (now_local() - timedelta(hours=2)).isoformat()
     result = _build_temporal_context(two_hours_ago)
     assert "2h" in result
     # Should not show "0min"
@@ -140,8 +151,8 @@ async def test_prompt_contains_temporal_section(db, mock_claude_api):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
-    ts = (now - timedelta(hours=2)).isoformat()
+    now = now_local()
+    ts = _utc_iso(now - timedelta(hours=2))
     await db.execute(
         "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, 'msg-1', 'inbound', 'Oi', ?)",
         (ts,),
@@ -163,8 +174,8 @@ async def test_prompt_contains_timestamps_in_history(db, mock_claude_api):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
-    ts = (now - timedelta(minutes=10)).isoformat()
+    now = now_local()
+    ts = _utc_iso(now - timedelta(minutes=10))
     await db.execute(
         "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, 'msg-1', 'inbound', 'Oi', ?)",
         (ts,),
@@ -185,9 +196,9 @@ async def test_last_inbound_iso_tracks_inbound_only(db):
     await db.execute(
         "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
     )
-    now = datetime.now()
-    inbound_ts = (now - timedelta(hours=3)).isoformat()
-    outbound_ts = (now - timedelta(hours=1)).isoformat()
+    now = now_local()
+    inbound_ts = _utc_iso(now - timedelta(hours=3))
+    outbound_ts = _utc_iso(now - timedelta(hours=1))
     await db.execute(
         "INSERT INTO messages (conversation_id, evolution_message_id, direction, content, created_at) VALUES (1, 'msg-1', 'inbound', 'Oi', ?)",
         (inbound_ts,),

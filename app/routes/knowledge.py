@@ -1,5 +1,8 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from app.config import settings
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -39,7 +42,7 @@ async def list_docs():
         return []
     docs = []
     for f in sorted(KNOWLEDGE_DIR.glob("*.md")):
-        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat()
+        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=ZoneInfo(settings.timezone)).isoformat()
         docs.append({"name": f.stem, "modified_at": mtime})
     return docs
 

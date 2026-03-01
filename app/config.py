@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from pydantic_settings import BaseSettings
 
 
@@ -12,6 +15,7 @@ class Settings(BaseSettings):
     app_password: str = ""
     session_max_age: int = 604800  # 7 days in seconds
     operators: str = ""  # comma-separated list of operator names
+    timezone: str = "America/Sao_Paulo"
 
     model_config = {"env_file": ".env"}
 
@@ -23,3 +27,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def now_local() -> datetime:
+    return datetime.now(ZoneInfo(settings.timezone))
