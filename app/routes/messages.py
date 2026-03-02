@@ -12,10 +12,11 @@ from starlette.requests import Request
 from app.auth import get_operator_from_request
 from app.config import settings
 from app.database import get_db
-from app.models import RegenerateRequest
+from app.models import RegenerateRequest, RewriteRequest
 from app.services.evolution import send_document_message, send_media_message, send_text_message
 from app.services.draft_engine import regenerate_draft
 from app.services.strategic_annotation import generate_annotation
+from app.services.text_rewrite import rewrite_text
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -247,3 +248,20 @@ async def suggest_followup(conversation_id: int, request: Request):
     )
 
     return {"status": "ok"}
+
+
+@router.post("/conversations/{conversation_id}/rewrite")
+async def rewrite_message(conversation_id: int, req: RewriteRequest):
+    db = await get_db()
+    try:
+        row = await db.execute(
+            "SELECT id FROM conversations WHERE id = ?",
+            (conversation_id,),
+        )
+        if not await row.fetchone():
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    finally:
+        await db.close()
+
+    rewritten = await rewrite_text(req.text)
+    return {"text": rewritten}

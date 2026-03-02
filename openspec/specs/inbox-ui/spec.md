@@ -23,7 +23,7 @@ The learning tab SHALL display history stats showing how many annotations have b
 - **THEN** stats SHALL show counts for validated, rejected, and promoted annotations
 
 ### Requirement: Display last responder in conversation list
-The conversation list SHALL display the name of the operator who sent the last outbound message in each conversation. The name SHALL appear below the message preview text.
+The conversation list SHALL display the name of the operator who sent the last outbound message in each conversation. The name SHALL appear below the message preview text. Each conversation item SHALL also display visual indicators based on `is_new` and `needs_reply` flags. The API response SHALL include `funnel_product` and `funnel_stage` for each conversation.
 
 #### Scenario: Conversation has outbound messages with sent_by
 - **WHEN** the conversation list loads and a conversation has outbound messages with `sent_by` set
@@ -36,3 +36,42 @@ The conversation list SHALL display the name of the operator who sent the last o
 #### Scenario: Last outbound message has no sent_by
 - **WHEN** the conversation list loads and the most recent outbound message has `sent_by` as NULL (pre-migration message)
 - **THEN** the system SHALL not display any operator name for that conversation
+
+#### Scenario: New message indicator
+- **WHEN** a conversation has `is_new` = true
+- **THEN** the system SHALL display a green dot before the contact name and render the name in bold
+
+#### Scenario: Needs reply indicator
+- **WHEN** a conversation has `is_new` = false and `needs_reply` = true
+- **THEN** the system SHALL render the contact name in bold (no green dot)
+
+#### Scenario: No pending action
+- **WHEN** a conversation has `is_new` = false and `needs_reply` = false
+- **THEN** the system SHALL render the contact name in normal weight (no dot, no bold)
+
+#### Scenario: Funnel data in API response
+- **WHEN** the conversation list is fetched
+- **THEN** each conversation item SHALL include `funnel_product` and `funnel_stage` fields
+
+### Requirement: Rewrite button in compose area
+The compose area SHALL include a "Reescrever" button in the `#btn-group`, positioned between the send button and the attach button. The button SHALL be styled distinctly from send (not green) to avoid confusion with the send action.
+
+#### Scenario: Button visibility
+- **WHEN** the operator views the compose area of any conversation
+- **THEN** a "Reescrever" button SHALL be visible between "Enviar" and the attach button
+
+#### Scenario: Button click triggers rewrite
+- **WHEN** the operator has text in the textarea and clicks "Reescrever"
+- **THEN** the system SHALL send the textarea content to `POST /conversations/{id}/rewrite` and replace the textarea content with the returned text
+
+#### Scenario: Loading state during rewrite
+- **WHEN** the rewrite request is in progress
+- **THEN** the button SHALL show a loading indicator (e.g., "Reescrevendo...") and be disabled until the response arrives
+
+#### Scenario: Empty textarea
+- **WHEN** the textarea is empty and the operator clicks "Reescrever"
+- **THEN** nothing SHALL happen (button disabled or no-op)
+
+#### Scenario: Error handling
+- **WHEN** the rewrite request fails
+- **THEN** the system SHALL show an error alert and keep the original text in the textarea unchanged

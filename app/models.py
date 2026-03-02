@@ -75,3 +75,7 @@ class RegenerateRequest(BaseModel):
     draft_index: int | None = None
     operator_instruction: str | None = None
     trigger_message_id: int
+
+
+class RewriteRequest(BaseModel):
+    text: str

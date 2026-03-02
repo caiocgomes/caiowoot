@@ -103,6 +103,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 #send-btn { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 #send-btn:hover { background: #1da851; }
 #send-btn:disabled { background: #ccc; cursor: not-allowed; }
+#rewrite-btn { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; color: #555; }
+#rewrite-btn:hover { background: #f0f0f0; }
+#rewrite-btn:disabled { color: #bbb; cursor: not-allowed; }
 #attach-btn { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; cursor: pointer; }
 #attach-btn:hover { background: #f0f0f0; }
 #attach-file { display: none; }
@@ -293,7 +296,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
   #draft-input { min-height: 100px; width: 100%; }
   #draft-area { flex-direction: column; gap: 6px; }
   #btn-group { flex-direction: row; justify-content: flex-end; width: 100%; gap: 8px; }
-  #send-btn, #attach-btn { min-height: 44px; }
+  #send-btn, #rewrite-btn, #attach-btn { min-height: 44px; }
   #compose { padding: 8px 10px; }
 }
 </style>
@@ -425,6 +428,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
           <textarea id="draft-input" placeholder="Digite sua mensagem..."></textarea>
           <div id="btn-group">
             <button id="send-btn">Enviar</button>
+            <button id="rewrite-btn" title="Reescrever texto" disabled>Reescrever</button>
             <button id="attach-btn" title="Anexar arquivo">&#x1F4CE;</button>
             <input type="file" id="attach-file">
           </div>

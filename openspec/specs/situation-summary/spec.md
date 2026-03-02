@@ -1,19 +1,23 @@
 ## ADDED Requirements
 
 ### Requirement: Generate situation summary before drafts
-The system SHALL generate a situation summary (2-3 sentences) via Haiku before generating draft variations. The summary SHALL describe the strategic situation: stage of the conversation, apparent client profile, what has been discussed, and the expected next move.
+The system SHALL generate a situation summary via Haiku before generating draft variations. The response SHALL be a JSON object with three fields: `summary` (2-3 sentence text), `product` (product identifier or null), `stage` (funnel stage or null). The `summary` field SHALL describe the strategic situation: stage of the conversation, apparent client profile, what has been discussed, and the expected next move.
 
 #### Scenario: Summary for first contact
 - **WHEN** a customer sends the first message in a conversation (e.g., "vi seu vídeo, quanto custa o curso?")
-- **THEN** the situation summary SHALL describe: first contact, no prior qualification, customer's apparent intent, and recommended strategic approach (e.g., "Primeiro contato. Cliente demonstra interesse genérico após ver conteúdo no Instagram. Pergunta preço direto sem contexto sobre perfil ou objetivos. Nenhuma qualificação feita. Momento de qualificar antes de precificar.")
+- **THEN** the situation summary SHALL return JSON with `summary` describing first contact and recommended approach, `product` as the inferred product or null, and `stage` as "qualifying"
 
 #### Scenario: Summary for ongoing conversation
 - **WHEN** a customer sends a message in an existing conversation with prior exchanges
-- **THEN** the situation summary SHALL incorporate conversation history: what has been discussed, what the operator has already qualified, current stage (qualifying, recommending, handling objection, closing)
+- **THEN** the situation summary SHALL return JSON incorporating conversation history with appropriate `product` and `stage` reflecting current funnel position
 
 #### Scenario: Summary includes conversation context
 - **WHEN** the conversation has 3+ messages exchanged
-- **THEN** the situation summary SHALL reference specific information already gathered (e.g., "Cliente é desenvolvedor Python, busca transição para dados. Já qualificado como perfil técnico intermediário. Objeção de preço ativa.")
+- **THEN** the `summary` field SHALL reference specific information already gathered, and `product` and `stage` SHALL reflect the most current understanding
+
+#### Scenario: JSON parse failure graceful degradation
+- **WHEN** the Haiku response cannot be parsed as JSON
+- **THEN** the system SHALL use the raw response text as the `summary` and set `product` and `stage` to null
 
 ### Requirement: Summary is included in draft prompt as explicit context
 The generated situation summary SHALL be inserted into the prompt sent to generate draft variations, in a dedicated section before the conversation history. All 3 draft variations SHALL receive the same situation summary.

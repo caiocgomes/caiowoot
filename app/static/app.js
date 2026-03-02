@@ -430,6 +430,41 @@ async function sendMessage() {
   }
 }
 
+// --- Rewrite ---
+async function rewriteText() {
+  const input = document.getElementById("draft-input");
+  const text = input.value.trim();
+  if (!text || !currentConversationId) return;
+
+  const btn = document.getElementById("rewrite-btn");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Reescrevendo...";
+
+  try {
+    const res = await fetch(`/conversations/${currentConversationId}/rewrite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(`Erro ao reescrever: ${err.detail || "erro desconhecido"}`);
+      return;
+    }
+
+    const data = await res.json();
+    input.value = data.text;
+    autoResize(input);
+  } catch (e) {
+    alert("Erro ao reescrever: falha na conexão");
+  } finally {
+    btn.textContent = originalLabel;
+    btn.disabled = !input.value.trim();
+  }
+}
+
 // --- Utils ---
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -1167,6 +1202,7 @@ document.getElementById("draft-input").onkeydown = (e) => {
 };
 document.getElementById("draft-input").oninput = function () {
   autoResize(this);
+  document.getElementById("rewrite-btn").disabled = !this.value.trim();
 };
 document.getElementById("regen-all-btn").onclick = regenerateAll;
 document.getElementById("regen-instruction-btn").onclick = regenerateAll;
@@ -1176,6 +1212,7 @@ document.getElementById("instruction-input").onkeydown = (e) => {
     regenerateAll();
   }
 };
+document.getElementById("rewrite-btn").onclick = rewriteText;
 document.getElementById("attach-btn").onclick = () => document.getElementById("attach-file").click();
 document.getElementById("attach-file").onchange = handleFileSelect;
 document.getElementById("attachment-remove").onclick = removeAttachment;
