@@ -1106,6 +1106,26 @@ async function updateFunnelProduct(value) {
   });
 }
 
+async function classifyConversation() {
+  if (!currentConversationId) return;
+  const btn = document.getElementById("ctx-classify-btn");
+  btn.disabled = true;
+  btn.textContent = "Analisando...";
+  try {
+    const res = await fetch(`/conversations/${currentConversationId}/classify`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      renderContextPanel(
+        { funnel_product: data.product, funnel_stage: data.stage },
+        data.summary,
+      );
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Atualizar";
+  }
+}
+
 async function updateFunnelStage(stage) {
   if (!currentConversationId) return;
   await fetch(`/conversations/${currentConversationId}/funnel`, {
