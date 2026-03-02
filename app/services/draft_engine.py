@@ -256,9 +256,27 @@ async def _build_prompt_parts(
     # Generate situation summary if not provided
     if situation_summary is None:
         try:
-            situation_summary = await generate_situation_summary(
+            summary_result = await generate_situation_summary(
                 conversation_history, contact_name=first_name
             )
+            situation_summary = summary_result["summary"]
+            # Update conversation funnel if AI extracted product/stage
+            funnel_product = summary_result.get("product")
+            funnel_stage = summary_result.get("stage")
+            if funnel_product or funnel_stage:
+                updates = []
+                params = []
+                if funnel_product:
+                    updates.append("funnel_product = ?")
+                    params.append(funnel_product)
+                if funnel_stage:
+                    updates.append("funnel_stage = ?")
+                    params.append(funnel_stage)
+                params.append(conversation_id)
+                await db.execute(
+                    f"UPDATE conversations SET {', '.join(updates)} WHERE id = ?",
+                    params,
+                )
         except Exception:
             logger.exception("Failed to generate situation summary")
             situation_summary = None

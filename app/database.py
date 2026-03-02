@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     contact_name TEXT,
     status TEXT DEFAULT 'active',
     last_read_at TIMESTAMP,
+    funnel_product TEXT,
+    funnel_stage TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -130,6 +132,10 @@ MIGRATIONS = [
     """),
     ("last_read_at_on_conversations",
      "ALTER TABLE conversations ADD COLUMN last_read_at TIMESTAMP"),
+    ("funnel_product_on_conversations",
+     "ALTER TABLE conversations ADD COLUMN funnel_product TEXT"),
+    ("funnel_stage_on_conversations",
+     "ALTER TABLE conversations ADD COLUMN funnel_stage TEXT"),
 ]
 
 _chroma_client = None

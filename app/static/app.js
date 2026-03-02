@@ -113,10 +113,7 @@ async function openConversation(id) {
   const data = await res.json();
 
   document.getElementById("main-empty").style.display = "none";
-  document.getElementById("chat-header").style.display = "block";
-  document.getElementById("messages").style.display = "flex";
-  document.getElementById("messages").style.flexDirection = "column";
-  document.getElementById("compose").style.display = "block";
+  document.getElementById("chat-wrapper").style.display = "flex";
 
   if (isMobile()) document.body.classList.add("mobile-chat-active");
 
@@ -146,6 +143,9 @@ async function openConversation(id) {
   if (data.pending_drafts && data.pending_drafts.length > 0) {
     showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
   }
+
+  // Render context panel
+  renderContextPanel(conv, data.situation_summary);
 
   loadConversations();
 }
@@ -740,9 +740,7 @@ function switchTab(tab) {
   reviewList.style.display = "none";
 
   // Hide all main panels
-  document.getElementById("chat-header").style.display = "none";
-  document.getElementById("messages").style.display = "none";
-  document.getElementById("compose").style.display = "none";
+  document.getElementById("chat-wrapper").style.display = "none";
   document.getElementById("main-empty").style.display = "none";
   hideKnowledgePanels();
   hideReviewDetail();
@@ -751,9 +749,7 @@ function switchTab(tab) {
   if (tab === "conversations") {
     convList.style.display = "block";
     if (currentConversationId) {
-      document.getElementById("chat-header").style.display = "block";
-      document.getElementById("messages").style.display = "flex";
-      document.getElementById("compose").style.display = "block";
+      document.getElementById("chat-wrapper").style.display = "flex";
     } else {
       document.getElementById("main-empty").style.display = "flex";
       document.getElementById("main-empty").textContent = "Selecione uma conversa";
@@ -1067,6 +1063,59 @@ async function resetPrompt(key) {
     statusEl.textContent = `"${PROMPT_LABELS[key]}" resetado`;
     setTimeout(() => { statusEl.textContent = ""; }, 3000);
   }
+}
+
+// --- Context Panel ---
+const FUNNEL_STAGES = ["qualifying", "decided", "handbook_sent", "link_sent", "purchased"];
+
+function renderContextPanel(conv, situationSummary) {
+  // Product
+  const select = document.getElementById("ctx-product-select");
+  select.value = conv.funnel_product || "";
+
+  // Stage
+  const currentStage = conv.funnel_stage;
+  const stageIdx = FUNNEL_STAGES.indexOf(currentStage);
+  document.querySelectorAll(".ctx-stage-item").forEach((item, i) => {
+    item.classList.remove("active", "done");
+    if (item.dataset.stage === currentStage) {
+      item.classList.add("active");
+    } else if (stageIdx >= 0 && i < stageIdx) {
+      item.classList.add("done");
+    }
+  });
+
+  // Summary
+  document.getElementById("ctx-summary-text").textContent =
+    situationSummary || "Sem resumo ainda";
+}
+
+async function updateFunnelProduct(value) {
+  if (!currentConversationId) return;
+  await fetch(`/conversations/${currentConversationId}/funnel`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ funnel_product: value || null }),
+  });
+}
+
+async function updateFunnelStage(stage) {
+  if (!currentConversationId) return;
+  await fetch(`/conversations/${currentConversationId}/funnel`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ funnel_stage: stage }),
+  });
+  // Re-render stage UI
+  const stageIdx = FUNNEL_STAGES.indexOf(stage);
+  document.querySelectorAll(".ctx-stage-item").forEach((item, i) => {
+    item.classList.remove("active", "done");
+    if (item.dataset.stage === stage) {
+      item.classList.add("active");
+    } else if (i < stageIdx) {
+      item.classList.add("done");
+    }
+  });
 }
 
 // --- Init ---

@@ -21,7 +21,9 @@ async def test_generate_summary_calls_haiku():
             contact_name="Maria",
         )
 
-        assert result == "Primeiro contato. Cliente viu vídeo e perguntou preço sem contexto."
+        assert result["summary"] == "Primeiro contato. Cliente viu vídeo e perguntou preço sem contexto."
+        assert result["product"] is None  # plain text fallback
+        assert result["stage"] is None
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["system"] == SUMMARY_PROMPT
@@ -56,4 +58,4 @@ async def test_generate_summary_strips_whitespace():
         mock.return_value = mock_client
 
         result = await generate_situation_summary("Cliente: Oi")
-        assert result == "Resumo com espaços."
+        assert result["summary"] == "Resumo com espaços."

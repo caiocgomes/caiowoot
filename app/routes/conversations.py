@@ -1,6 +1,14 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.database import get_db
+
+VALID_FUNNEL_STAGES = {"qualifying", "decided", "handbook_sent", "link_sent", "purchased"}
+
+
+class FunnelUpdate(BaseModel):
+    funnel_product: str | None = None
+    funnel_stage: str | None = None
 
 router = APIRouter()
 
@@ -11,7 +19,9 @@ async def list_conversations():
     try:
         rows = await db.execute("""
             SELECT
-                c.id, c.phone_number, c.contact_name, c.status, c.created_at, c.updated_at,
+                c.id, c.phone_number, c.contact_name, c.status,
+                c.funnel_product, c.funnel_stage,
+                c.created_at, c.updated_at,
                 m.content as last_message,
                 m.created_at as last_message_at,
                 CASE WHEN EXISTS (
@@ -86,10 +96,55 @@ async def get_conversation(conversation_id: int):
         elif draft:
             pending_drafts = [dict(draft)]
 
+        # Get latest situation summary from drafts
+        summary_row = await db.execute(
+            "SELECT situation_summary FROM drafts WHERE conversation_id = ? AND situation_summary IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+            (conversation_id,),
+        )
+        summary = await summary_row.fetchone()
+        latest_summary = summary["situation_summary"] if summary else None
+
         return {
             "conversation": dict(conv),
             "messages": messages,
             "pending_drafts": pending_drafts,
+            "situation_summary": latest_summary,
         }
+    finally:
+        await db.close()
+
+
+@router.patch("/conversations/{conversation_id}/funnel")
+async def update_funnel(conversation_id: int, body: FunnelUpdate):
+    if body.funnel_stage and body.funnel_stage not in VALID_FUNNEL_STAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid funnel_stage. Valid values: {', '.join(sorted(VALID_FUNNEL_STAGES))}",
+        )
+
+    db = await get_db()
+    try:
+        row = await db.execute("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
+        if not await row.fetchone():
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        updates = []
+        params = []
+        if body.funnel_product is not None:
+            updates.append("funnel_product = ?")
+            params.append(body.funnel_product)
+        if body.funnel_stage is not None:
+            updates.append("funnel_stage = ?")
+            params.append(body.funnel_stage)
+
+        if updates:
+            params.append(conversation_id)
+            await db.execute(
+                f"UPDATE conversations SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            await db.commit()
+
+        return {"status": "ok"}
     finally:
         await db.close()
