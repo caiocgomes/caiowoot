@@ -101,18 +101,21 @@ def mock_evolution_api():
 
 @pytest.fixture
 def mock_claude_api():
-    """Mock Claude API for draft generation (3 variations)."""
+    """Mock Claude API for draft generation (3 variations) using tool_use."""
     with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
 
         def make_response(draft_text="Oi! Tudo bem? Qual seu interesse em IA?", justification="Primeira mensagem, qualificando o lead."):
-            mock_response = AsyncMock()
-            mock_response.content = [
-                AsyncMock(text=json.dumps({
-                    "draft": draft_text,
-                    "justification": justification
-                }))
-            ]
+            mock_response = MagicMock()
+            tool_block = MagicMock()
+            tool_block.type = "tool_use"
+            tool_block.name = "draft_response"
+            tool_block.input = {
+                "draft": draft_text,
+                "justification": justification,
+                "suggested_attachment": None,
+            }
+            mock_response.content = [tool_block]
             return mock_response
 
         mock_client.messages.create = AsyncMock(side_effect=[

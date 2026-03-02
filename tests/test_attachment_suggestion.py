@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -157,31 +156,43 @@ async def test_edit_pair_null_attachment_when_no_file(db, client, mock_evolution
 
 
 @pytest.mark.asyncio
-async def test_parse_response_extracts_suggested_attachment():
-    """_parse_response extrai suggested_attachment do JSON."""
-    from app.services.draft_engine import _parse_response
+async def test_extract_tool_response_with_attachment():
+    """_extract_tool_response extrai suggested_attachment do tool_use."""
+    from app.services.draft_engine import _extract_tool_response
 
-    response = json.dumps({
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "draft_response"
+    tool_block.input = {
         "draft": "Segue o handbook!",
         "justification": "Cliente pediu detalhes.",
-        "suggested_attachment": "handbook-cdo.pdf"
-    })
-    draft, justification, suggested = _parse_response(response)
+        "suggested_attachment": "handbook-cdo.pdf",
+    }
+    mock_response.content = [tool_block]
+
+    draft, justification, suggested = _extract_tool_response(mock_response)
     assert draft == "Segue o handbook!"
     assert justification == "Cliente pediu detalhes."
     assert suggested == "handbook-cdo.pdf"
 
 
 @pytest.mark.asyncio
-async def test_parse_response_null_attachment_when_absent():
-    """_parse_response retorna None quando suggested_attachment ausente."""
-    from app.services.draft_engine import _parse_response
+async def test_extract_tool_response_null_attachment_when_absent():
+    """_extract_tool_response retorna None quando suggested_attachment ausente."""
+    from app.services.draft_engine import _extract_tool_response
 
-    response = json.dumps({
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "draft_response"
+    tool_block.input = {
         "draft": "Oi!",
         "justification": "Greeting.",
-    })
-    draft, justification, suggested = _parse_response(response)
+    }
+    mock_response.content = [tool_block]
+
+    draft, justification, suggested = _extract_tool_response(mock_response)
     assert suggested is None
 
 

@@ -46,12 +46,30 @@ ATTACHMENT_SECTION = """## Anexos
 Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode sugerir o envio de um arquivo junto com a mensagem. Sugira anexo quando o contexto indicar que o cliente está avançando na decisão de compra, pediu detalhes do programa, ou quando os exemplos anteriores mostram que o operador costuma enviar o arquivo nessa situação. Não sugira anexo se a conversa ainda está na fase de qualificação inicial."""
 
 RESPONSE_FORMAT_SECTION = """## Formato de resposta
-Responda SEMPRE em JSON com exatamente estes campos:
-{
-  "draft": "texto da mensagem proposta para o cliente",
-  "justification": "1-2 frases explicando por que você escolheu essa abordagem (isso NÃO vai pro cliente, é só pro operador)",
-  "suggested_attachment": "nome-do-arquivo.pdf ou null se não houver sugestão"
-}"""
+Use a tool draft_response para retornar sua resposta."""
+
+DRAFT_TOOL = {
+    "name": "draft_response",
+    "description": "Retorna o draft de resposta para o cliente.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "draft": {
+                "type": "string",
+                "description": "Texto da mensagem proposta para o cliente.",
+            },
+            "justification": {
+                "type": "string",
+                "description": "1-2 frases explicando por que você escolheu essa abordagem (isso NÃO vai pro cliente, é só pro operador).",
+            },
+            "suggested_attachment": {
+                "type": ["string", "null"],
+                "description": "Nome do arquivo de anexo sugerido (ex: handbook.pdf), ou null se não houver sugestão.",
+            },
+        },
+        "required": ["draft", "justification"],
+    },
+}
 
 # Keep legacy constant for backward compatibility with tests that reference it
 SYSTEM_PROMPT = None  # Now built dynamically via _build_system_prompt()
@@ -113,17 +131,18 @@ async def _get_approach_modifiers() -> list[tuple[str, str]]:
     ]
 
 
-def _parse_response(response_text: str) -> tuple[str, str, str | None]:
-    text = response_text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1]
-        text = text.rsplit("```", 1)[0].strip()
-    try:
-        parsed = json.loads(text)
-        suggested = parsed.get("suggested_attachment") or None
-        return parsed.get("draft", text), parsed.get("justification", ""), suggested
-    except json.JSONDecodeError:
-        return text, "Resposta não veio em JSON, usando texto direto", None
+def _extract_tool_response(response) -> tuple[str, str, str | None]:
+    """Extract draft, justification and suggested_attachment from tool_use response."""
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "draft_response":
+            inp = block.input
+            suggested = inp.get("suggested_attachment") or None
+            return inp.get("draft", ""), inp.get("justification", ""), suggested
+    # Fallback: try to extract text if no tool_use block
+    for block in response.content:
+        if hasattr(block, "text"):
+            return block.text.strip(), "Resposta não usou tool_use", None
+    return "", "Sem resposta", None
 
 
 def _build_rules_section(rules: list[dict]) -> str:
@@ -390,9 +409,11 @@ async def _call_haiku(user_content: str, approach_modifier: str, system_prompt: 
         model=settings.claude_haiku_model,
         max_tokens=1024,
         system=system,
+        tools=[DRAFT_TOOL],
+        tool_choice={"type": "tool", "name": "draft_response"},
         messages=[{"role": "user", "content": user_content}],
     )
-    draft_text, justification, suggested = _parse_response(response.content[0].text)
+    draft_text, justification, suggested = _extract_tool_response(response)
     suggested = _validate_suggested_attachment(suggested)
     return draft_text, justification, suggested
 

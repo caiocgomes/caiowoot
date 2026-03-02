@@ -1,5 +1,15 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _make_draft_tool_response(draft, justification):
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "draft_response"
+    tool_block.input = {"draft": draft, "justification": justification, "suggested_attachment": None}
+    mock_response.content = [tool_block]
+    return mock_response
 
 
 @pytest.mark.asyncio
@@ -26,9 +36,9 @@ async def test_regenerate_single_draft(db, mock_claude_api):
     original_texts = [d["draft_text"] for d in drafts]
 
     # Reset mock for regeneration call
-    mock_claude_api.messages.create = AsyncMock(return_value=AsyncMock(
-        content=[AsyncMock(text='{"draft": "Nova resposta regenerada!", "justification": "Regenerada."}')]
-    ))
+    mock_claude_api.messages.create = AsyncMock(
+        return_value=_make_draft_tool_response("Nova resposta regenerada!", "Regenerada.")
+    )
 
     # Regenerate only variation 1
     await regenerate_draft(1, 1, draft_index=1)
@@ -73,9 +83,9 @@ async def test_regenerate_all_drafts(db, mock_claude_api):
 
     # Reset mock for regeneration
     mock_claude_api.messages.create = AsyncMock(side_effect=[
-        AsyncMock(content=[AsyncMock(text='{"draft": "Regen direta", "justification": "R1"}')]),
-        AsyncMock(content=[AsyncMock(text='{"draft": "Regen consultiva", "justification": "R2"}')]),
-        AsyncMock(content=[AsyncMock(text='{"draft": "Regen casual", "justification": "R3"}')]),
+        _make_draft_tool_response("Regen direta", "R1"),
+        _make_draft_tool_response("Regen consultiva", "R2"),
+        _make_draft_tool_response("Regen casual", "R3"),
     ])
 
     # Regenerate all (draft_index=None)
