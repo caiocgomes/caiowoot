@@ -47,6 +47,13 @@ function handleWSEvent(data) {
     console.log("drafts_ready received, drafts count:", data.drafts?.length, "match:", data.conversation_id === currentConversationId);
     if (data.conversation_id === currentConversationId) {
       showDrafts(data.drafts, data.draft_group_id);
+      // Update context panel with AI classification
+      if (data.funnel_product != null || data.funnel_stage != null || data.situation_summary != null) {
+        renderContextPanel(
+          { funnel_product: data.funnel_product, funnel_stage: data.funnel_stage },
+          data.situation_summary,
+        );
+      }
     }
     loadConversations();
   } else if (data.type === "message_sent") {

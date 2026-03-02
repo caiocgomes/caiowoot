@@ -459,6 +459,13 @@ async def generate_drafts(
 
         await db.commit()
 
+        # Fetch current funnel state to include in broadcast
+        row = await db.execute(
+            "SELECT funnel_product, funnel_stage FROM conversations WHERE id = ?",
+            (conversation_id,),
+        )
+        conv_row = await row.fetchone()
+
         from app.websocket_manager import manager
         await manager.broadcast(
             conversation_id,
@@ -467,6 +474,9 @@ async def generate_drafts(
                 "conversation_id": conversation_id,
                 "draft_group_id": draft_group_id,
                 "drafts": drafts,
+                "funnel_product": conv_row["funnel_product"] if conv_row else None,
+                "funnel_stage": conv_row["funnel_stage"] if conv_row else None,
+                "situation_summary": situation_summary,
             },
         )
 
@@ -577,6 +587,13 @@ async def regenerate_draft(
 
             await db.commit()
 
+        # Fetch current funnel state to include in broadcast
+        row = await db.execute(
+            "SELECT funnel_product, funnel_stage FROM conversations WHERE id = ?",
+            (conversation_id,),
+        )
+        conv_row = await row.fetchone()
+
         from app.websocket_manager import manager
         await manager.broadcast(
             conversation_id,
@@ -585,6 +602,9 @@ async def regenerate_draft(
                 "conversation_id": conversation_id,
                 "draft_group_id": draft_group_id,
                 "drafts": drafts,
+                "funnel_product": conv_row["funnel_product"] if conv_row else None,
+                "funnel_stage": conv_row["funnel_stage"] if conv_row else None,
+                "situation_summary": situation_summary,
             },
         )
 
