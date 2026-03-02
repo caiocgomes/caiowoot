@@ -1,17 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.draft_engine import generate_drafts
-
-
-def _make_draft_tool_response(draft="Oi!", justification="Test"):
-    mock_response = MagicMock()
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "draft_response"
-    tool_block.input = {"draft": draft, "justification": justification, "suggested_attachment": None}
-    mock_response.content = [tool_block]
-    return mock_response
+from tests.conftest import make_draft_tool_response
 
 
 @pytest.mark.asyncio
@@ -76,16 +67,17 @@ async def test_learned_rules_in_system_prompt(db):
         ]
 
         mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=_make_draft_tool_response())
+        mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
         mock_anthropic.return_value = mock_client
 
         await generate_drafts(1, 1)
 
         call_kwargs = mock_client.messages.create.call_args_list[0].kwargs
-        system_prompt = call_kwargs["system"]
-        assert "## Regras aprendidas" in system_prompt
-        assert "Sempre qualificar antes de precificar." in system_prompt
-        assert "Objeção de preço: ancorar em custo por dia." in system_prompt
+        system_blocks = call_kwargs["system"]
+        system_text = " ".join(block["text"] for block in system_blocks)
+        assert "## Regras aprendidas" in system_text
+        assert "Sempre qualificar antes de precificar." in system_text
+        assert "Objeção de preço: ancorar em custo por dia." in system_text
 
 
 @pytest.mark.asyncio
@@ -106,7 +98,7 @@ async def test_smart_retrieval_used_for_fewshot(db):
          patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_anthropic, \
          patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]):
         mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=_make_draft_tool_response())
+        mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
         mock_anthropic.return_value = mock_client
 
         await generate_drafts(1, 1)

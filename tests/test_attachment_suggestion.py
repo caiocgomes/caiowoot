@@ -1,9 +1,11 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from tests.conftest import make_draft_tool_response
 
 os.environ.setdefault("EVOLUTION_API_URL", "http://localhost:8080")
 os.environ.setdefault("EVOLUTION_API_KEY", "test-key")
@@ -160,16 +162,7 @@ async def test_extract_tool_response_with_attachment():
     """_extract_tool_response extrai suggested_attachment do tool_use."""
     from app.services.draft_engine import _extract_tool_response
 
-    mock_response = MagicMock()
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "draft_response"
-    tool_block.input = {
-        "draft": "Segue o handbook!",
-        "justification": "Cliente pediu detalhes.",
-        "suggested_attachment": "handbook-cdo.pdf",
-    }
-    mock_response.content = [tool_block]
+    mock_response = make_draft_tool_response("Segue o handbook!", "Cliente pediu detalhes.", "handbook-cdo.pdf")
 
     draft, justification, suggested = _extract_tool_response(mock_response)
     assert draft == "Segue o handbook!"
@@ -182,15 +175,7 @@ async def test_extract_tool_response_null_attachment_when_absent():
     """_extract_tool_response retorna None quando suggested_attachment ausente."""
     from app.services.draft_engine import _extract_tool_response
 
-    mock_response = MagicMock()
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "draft_response"
-    tool_block.input = {
-        "draft": "Oi!",
-        "justification": "Greeting.",
-    }
-    mock_response.content = [tool_block]
+    mock_response = make_draft_tool_response("Oi!", "Greeting.")
 
     draft, justification, suggested = _extract_tool_response(mock_response)
     assert suggested is None
@@ -238,7 +223,7 @@ async def test_attachments_section_in_prompt(db):
     await db.commit()
 
     with patch("app.services.draft_engine.list_known_attachments", return_value=["handbook-cdo.pdf", "handbook-zero.pdf"]):
-        user_content, _, _ = await _build_prompt_parts(db, 1)
+        user_content, _, _, _ = await _build_prompt_parts(db, 1)
 
     assert "## Anexos disponíveis" in user_content
     assert "handbook-cdo.pdf" in user_content
@@ -259,7 +244,7 @@ async def test_no_attachments_section_when_empty(db):
     await db.commit()
 
     with patch("app.services.draft_engine.list_known_attachments", return_value=[]):
-        user_content, _, _ = await _build_prompt_parts(db, 1)
+        user_content, _, _, _ = await _build_prompt_parts(db, 1)
 
     assert "## Anexos disponíveis" not in user_content
 

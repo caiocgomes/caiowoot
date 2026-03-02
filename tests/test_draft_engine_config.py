@@ -193,7 +193,7 @@ async def test_proactive_uses_operator_name_in_instruction(db):
 
     from app.services.draft_engine import _build_prompt_parts
 
-    user_content, _, _ = await _build_prompt_parts(
+    user_content, _, _, _ = await _build_prompt_parts(
         db, conv_id, proactive=True, operator_name="João"
     )
     assert "João" in user_content

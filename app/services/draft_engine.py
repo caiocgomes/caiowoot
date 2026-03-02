@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import uuid
 from datetime import datetime
@@ -48,8 +47,10 @@ Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode su
 RESPONSE_FORMAT_SECTION = """## Formato de resposta
 Use a tool draft_response para retornar sua resposta."""
 
+DRAFT_TOOL_NAME = "draft_response"
+
 DRAFT_TOOL = {
-    "name": "draft_response",
+    "name": DRAFT_TOOL_NAME,
     "description": "Retorna o draft de resposta para o cliente.",
     "input_schema": {
         "type": "object",
@@ -134,7 +135,7 @@ async def _get_approach_modifiers() -> list[tuple[str, str]]:
 def _extract_tool_response(response) -> tuple[str, str, str | None]:
     """Extract draft, justification and suggested_attachment from tool_use response."""
     for block in response.content:
-        if block.type == "tool_use" and block.name == "draft_response":
+        if block.type == "tool_use" and block.name == DRAFT_TOOL_NAME:
             inp = block.input
             suggested = inp.get("suggested_attachment") or None
             return inp.get("draft", ""), inp.get("justification", ""), suggested
@@ -320,6 +321,9 @@ async def _build_prompt_parts(
     rules = await get_active_rules()
     rules_section = _build_rules_section(rules)
 
+    # Build knowledge section for system prompt
+    knowledge_section = f"\n\n## Base de conhecimento dos cursos\n\n{knowledge}"
+
     # List known attachments
     attachments = list_known_attachments()
     attachments_section = ""
@@ -345,11 +349,7 @@ async def _build_prompt_parts(
     else:
         final_instruction = "Gere o draft de resposta para a última mensagem do cliente."
 
-    user_content = f"""## Base de conhecimento dos cursos
-
-{knowledge}
-
-{few_shot_text}
+    user_content = f"""{few_shot_text}
 {attachments_section}
 {instruction_text}
 {client_section}
@@ -361,7 +361,7 @@ async def _build_prompt_parts(
 
 {final_instruction}"""
 
-    return user_content, situation_summary, rules_section
+    return user_content, situation_summary, rules_section, knowledge_section
 
 
 def _build_temporal_context(last_inbound_iso: str | None) -> str:
@@ -402,17 +402,31 @@ def _validate_suggested_attachment(suggested: str | None) -> str | None:
     return None
 
 
-async def _call_haiku(user_content: str, approach_modifier: str, system_prompt: str, rules_section: str = "") -> tuple[str, str, str | None]:
-    system = system_prompt + rules_section + f"\n\n## Estilo desta variação\n{approach_modifier}"
+async def _call_haiku(user_content: str, approach_modifier: str, system_prompt: str, rules_section: str = "", knowledge_section: str = "") -> tuple[str, str, str | None]:
+    system = [
+        {
+            "type": "text",
+            "text": system_prompt + rules_section + knowledge_section,
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": f"\n\n## Estilo desta variação\n{approach_modifier}",
+        },
+    ]
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
         model=settings.claude_haiku_model,
         max_tokens=1024,
         system=system,
         tools=[DRAFT_TOOL],
-        tool_choice={"type": "tool", "name": "draft_response"},
+        tool_choice={"type": "tool", "name": DRAFT_TOOL_NAME},
         messages=[{"role": "user", "content": user_content}],
     )
+    usage = response.usage
+    cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    logger.info("Cache metrics: read=%d write=%d input=%d", cache_read, cache_write, usage.input_tokens)
     draft_text, justification, suggested = _extract_tool_response(response)
     suggested = _validate_suggested_attachment(suggested)
     return draft_text, justification, suggested
@@ -430,17 +444,17 @@ async def generate_drafts(
         system_prompt = await _build_system_prompt(operator_name)
         approach_modifiers = await _get_approach_modifiers()
 
-        user_content, situation_summary, rules_section = await _build_prompt_parts(
+        user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
             db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
         )
 
-        full_prompt = system_prompt + rules_section + "\n\n" + user_content
+        full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         draft_group_id = str(uuid.uuid4())
 
         tasks = [
-            _call_haiku(user_content, modifier, system_prompt, rules_section)
+            _call_haiku(user_content, modifier, system_prompt, rules_section, knowledge_section)
             for _, modifier in approach_modifiers
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -520,15 +534,15 @@ async def regenerate_draft(
         system_prompt = await _build_system_prompt(operator_name)
         approach_modifiers = await _get_approach_modifiers()
 
-        user_content, situation_summary, rules_section = await _build_prompt_parts(
+        user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
             db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
         )
-        full_prompt = system_prompt + rules_section + "\n\n" + user_content
+        full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         if draft_index is not None:
             approach_name, modifier = approach_modifiers[draft_index]
-            draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, system_prompt, rules_section)
+            draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, system_prompt, rules_section, knowledge_section)
 
             row = await db.execute(
                 """SELECT id, draft_group_id FROM drafts
@@ -575,7 +589,7 @@ async def regenerate_draft(
                 (draft_group_id,),
             )
 
-            tasks = [_call_haiku(user_content, mod, system_prompt, rules_section) for _, mod in approach_modifiers]
+            tasks = [_call_haiku(user_content, mod, system_prompt, rules_section, knowledge_section) for _, mod in approach_modifiers]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             drafts = []

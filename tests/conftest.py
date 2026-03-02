@@ -1,5 +1,4 @@
 import os
-import json
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
@@ -105,26 +104,24 @@ def mock_claude_api():
     with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
 
-        def make_response(draft_text="Oi! Tudo bem? Qual seu interesse em IA?", justification="Primeira mensagem, qualificando o lead."):
-            mock_response = MagicMock()
-            tool_block = MagicMock()
-            tool_block.type = "tool_use"
-            tool_block.name = "draft_response"
-            tool_block.input = {
-                "draft": draft_text,
-                "justification": justification,
-                "suggested_attachment": None,
-            }
-            mock_response.content = [tool_block]
-            return mock_response
-
         mock_client.messages.create = AsyncMock(side_effect=[
-            make_response("Oi! Qual seu interesse em IA?", "Abordagem direta."),
-            make_response("E aí! Me conta, o que te trouxe aqui?", "Abordagem consultiva."),
-            make_response("Opa! Tudo bem? Em que posso ajudar?", "Abordagem casual."),
+            make_draft_tool_response("Oi! Qual seu interesse em IA?", "Abordagem direta."),
+            make_draft_tool_response("E aí! Me conta, o que te trouxe aqui?", "Abordagem consultiva."),
+            make_draft_tool_response("Opa! Tudo bem? Em que posso ajudar?", "Abordagem casual."),
         ])
         mock.return_value = mock_client
         yield mock_client
+
+
+def make_draft_tool_response(draft="Oi!", justification="Test", suggested_attachment=None):
+    """Build a mock Anthropic tool_use response for draft_response."""
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "draft_response"
+    tool_block.input = {"draft": draft, "justification": justification, "suggested_attachment": suggested_attachment}
+    mock_response.content = [tool_block]
+    return mock_response
 
 
 def make_webhook_payload(
