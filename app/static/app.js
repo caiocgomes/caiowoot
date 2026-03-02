@@ -154,6 +154,11 @@ async function openConversation(id) {
   // Render context panel
   renderContextPanel(conv, data.situation_summary);
 
+  // Auto-classify if no funnel data exists yet
+  if (!conv.funnel_product && !conv.funnel_stage && !data.situation_summary) {
+    classifyConversation();
+  }
+
   loadConversations();
 }
 
