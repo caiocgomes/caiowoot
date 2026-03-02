@@ -889,6 +889,184 @@ async function createDoc() {
   }
 }
 
+// --- Settings ---
+let settingsIsAdmin = false;
+let settingsCurrentTab = "profile";
+let settingsPrompts = {};
+let settingsProfile = {};
+
+const PROMPT_LABELS = {
+  postura: "Postura",
+  tom: "Tom",
+  regras: "Regras",
+  approach_direta: "Abordagem Direta",
+  approach_consultiva: "Abordagem Consultiva",
+  approach_casual: "Abordagem Casual",
+  summary_prompt: "Prompt de Resumo de Situacao",
+  annotation_prompt: "Prompt de Anotacao Estrategica",
+};
+
+async function openSettings() {
+  document.getElementById("settings-status").textContent = "";
+  settingsCurrentTab = "profile";
+
+  // Check admin status
+  try {
+    const res = await fetch("/api/settings/is-admin");
+    const data = await res.json();
+    settingsIsAdmin = data.is_admin;
+  } catch (e) {
+    settingsIsAdmin = false;
+  }
+
+  // Show/hide prompts tab
+  const promptsTab = document.getElementById("settings-prompts-tab");
+  promptsTab.style.display = settingsIsAdmin ? "" : "none";
+
+  // Load data
+  await loadSettingsProfile();
+  if (settingsIsAdmin) {
+    await loadSettingsPrompts();
+  }
+
+  // Reset tab state
+  document.querySelectorAll(".settings-tab").forEach(t => {
+    t.classList.toggle("active", t.dataset.stab === "profile");
+  });
+
+  renderSettingsTab("profile");
+  document.getElementById("settings-modal").classList.add("open");
+}
+
+function closeSettings() {
+  document.getElementById("settings-modal").classList.remove("open");
+}
+
+function switchSettingsTab(tab) {
+  settingsCurrentTab = tab;
+  document.querySelectorAll(".settings-tab").forEach(t => {
+    t.classList.toggle("active", t.dataset.stab === tab);
+  });
+  document.getElementById("settings-status").textContent = "";
+  renderSettingsTab(tab);
+}
+
+async function loadSettingsPrompts() {
+  try {
+    const res = await fetch("/api/settings/prompts");
+    settingsPrompts = await res.json();
+  } catch (e) {
+    settingsPrompts = {};
+  }
+}
+
+async function loadSettingsProfile() {
+  try {
+    const res = await fetch("/api/settings/profile");
+    settingsProfile = await res.json();
+  } catch (e) {
+    settingsProfile = {};
+  }
+}
+
+function renderSettingsTab(tab) {
+  const body = document.getElementById("settings-body");
+
+  if (tab === "profile") {
+    body.innerHTML = `
+      <div class="settings-field">
+        <label>Nome de exibicao</label>
+        <input type="text" id="settings-display-name" value="${escapeHtml(settingsProfile.display_name || "")}" placeholder="Como a IA deve se apresentar (ex: Joao Silva)">
+      </div>
+      <div class="settings-field">
+        <label>Contexto sobre voce</label>
+        <textarea id="settings-context" rows="6" placeholder="Informacoes que a IA deve saber sobre voce. Ex: Trabalho na equipe do Caio. Sou responsavel pelo suporte tecnico. Nao sou o dono dos cursos.">${escapeHtml(settingsProfile.context || "")}</textarea>
+      </div>
+    `;
+  } else if (tab === "prompts") {
+    let html = "";
+    for (const [key, label] of Object.entries(PROMPT_LABELS)) {
+      const value = settingsPrompts[key] || "";
+      html += `
+        <div class="settings-field">
+          <div class="settings-field-header">
+            <label>${label}</label>
+            <button class="reset-btn" onclick="resetPrompt('${key}')">Resetar</button>
+          </div>
+          <textarea id="settings-prompt-${key}" rows="4">${escapeHtml(value)}</textarea>
+        </div>
+      `;
+    }
+    body.innerHTML = html;
+  }
+}
+
+async function saveSettings() {
+  const statusEl = document.getElementById("settings-status");
+  statusEl.textContent = "Salvando...";
+
+  try {
+    if (settingsCurrentTab === "profile") {
+      const displayName = document.getElementById("settings-display-name").value.trim();
+      const context = document.getElementById("settings-context").value.trim();
+
+      const res = await fetch("/api/settings/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: displayName, context: context }),
+      });
+
+      if (res.ok) {
+        settingsProfile = { display_name: displayName, context: context };
+        statusEl.textContent = "Perfil salvo!";
+      } else {
+        statusEl.textContent = "Erro ao salvar perfil";
+      }
+    } else if (settingsCurrentTab === "prompts") {
+      const updates = {};
+      for (const key of Object.keys(PROMPT_LABELS)) {
+        const el = document.getElementById(`settings-prompt-${key}`);
+        if (el) updates[key] = el.value;
+      }
+
+      const res = await fetch("/api/settings/prompts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (res.ok) {
+        settingsPrompts = updates;
+        statusEl.textContent = "Prompts salvos!";
+      } else {
+        const err = await res.json();
+        statusEl.textContent = err.detail || "Erro ao salvar prompts";
+      }
+    }
+  } catch (e) {
+    statusEl.textContent = "Erro de conexao";
+  }
+
+  setTimeout(() => { statusEl.textContent = ""; }, 3000);
+}
+
+async function resetPrompt(key) {
+  const statusEl = document.getElementById("settings-status");
+
+  const res = await fetch("/api/settings/prompts", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ [key]: null }),
+  });
+
+  if (res.ok) {
+    await loadSettingsPrompts();
+    renderSettingsTab("prompts");
+    statusEl.textContent = `"${PROMPT_LABELS[key]}" resetado`;
+    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+  }
+}
+
 // --- Init ---
 document.getElementById("send-btn").onclick = sendMessage;
 document.getElementById("draft-input").onkeydown = (e) => {

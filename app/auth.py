@@ -59,6 +59,15 @@ def get_operator_from_request(request) -> str | None:
     return session.get("operator")
 
 
+def is_admin(operator_name: str | None) -> bool:
+    if not settings.operator_list:
+        return True
+    admin = settings.admin_operator
+    if not admin:
+        admin = settings.operator_list[0] if settings.operator_list else ""
+    return operator_name == admin
+
+
 # --- Rate limiting ---
 
 _rate_limit_store: dict[str, list[float]] = {}

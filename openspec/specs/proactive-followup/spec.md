@@ -1,29 +1,7 @@
 ## ADDED Requirements
 
-### Requirement: Operador pode solicitar drafts de continuação via botão
-O sistema SHALL exibir um botão "Sugerir resposta" na área de compose quando não há drafts pendentes e a última mensagem da conversa é outbound. Ao clicar, o sistema SHALL gerar 3 variações de draft como continuação da conversa.
-
-#### Scenario: Botão visível quando última mensagem é outbound
-- **WHEN** o operador abre uma conversa onde a última mensagem é outbound e não há drafts pendentes
-- **THEN** o sistema SHALL exibir um botão "Sugerir resposta" na área de compose, acima do textarea
-
-#### Scenario: Botão oculto quando última mensagem é inbound
-- **WHEN** o operador abre uma conversa onde a última mensagem é inbound
-- **THEN** o botão "Sugerir resposta" SHALL NOT ser exibido (drafts reativos já estarão sendo gerados)
-
-#### Scenario: Botão oculto quando há drafts pendentes
-- **WHEN** o operador abre uma conversa que já tem drafts pendentes (reativos ou proativos)
-- **THEN** o botão "Sugerir resposta" SHALL NOT ser exibido
-
-#### Scenario: Geração de drafts ao clicar
-- **WHEN** o operador clica no botão "Sugerir resposta"
-- **THEN** o sistema SHALL chamar `POST /conversations/{id}/suggest`
-- **THEN** o botão SHALL ser desabilitado e exibir estado de loading enquanto os drafts são gerados
-- **THEN** quando os drafts chegarem via WebSocket (`drafts_ready`), SHALL exibi-los normalmente (3 cards de variação)
-
-#### Scenario: Botão desaparece após drafts gerados
-- **WHEN** os drafts proativos são recebidos via WebSocket
-- **THEN** o botão "Sugerir resposta" SHALL desaparecer e os draft cards SHALL ser exibidos no lugar
+### ~~Requirement: Operador pode solicitar drafts de continuação via botão~~ [REMOVED]
+**Removed by change `always-visible-instruction-bar`**: O botão "Sugerir resposta" é substituído pela barra de instrução + botão regenerar que agora está sempre visível. O operador pode usar o regenerar pra gerar drafts em qualquer contexto (inbound sem drafts ou outbound querendo follow-up). O endpoint `POST /conversations/{id}/suggest` permanece no backend mas não é mais chamado pelo frontend.
 
 ### Requirement: Endpoint de geração proativa de drafts
 O sistema SHALL expor um endpoint `POST /conversations/{id}/suggest` que valida que a última mensagem é outbound, identifica o ID dessa mensagem, e dispara geração de drafts com flag proativa.

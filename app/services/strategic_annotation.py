@@ -25,6 +25,15 @@ Se o operador aceitou sem editar:
 Responda em 2-3 frases, direto ao ponto. Apenas o texto da anotação, sem formatação."""
 
 
+async def _get_annotation_prompt() -> str:
+    try:
+        from app.services.prompt_config import get_all_prompts
+        prompts = await get_all_prompts()
+        return prompts.get("annotation_prompt", ANNOTATION_PROMPT)
+    except Exception:
+        return ANNOTATION_PROMPT
+
+
 async def generate_annotation(
     edit_pair_id: int,
     customer_message: str,
@@ -36,6 +45,8 @@ async def generate_annotation(
 ):
     try:
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        system = await _get_annotation_prompt()
 
         user_content = ""
         if situation_summary:
@@ -52,7 +63,7 @@ async def generate_annotation(
         response = await client.messages.create(
             model=settings.claude_haiku_model,
             max_tokens=256,
-            system=ANNOTATION_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": user_content}],
         )
         annotation = response.content[0].text.strip()

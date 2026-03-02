@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS learned_rules (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS prompt_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS operator_profiles (
+    operator_name TEXT PRIMARY KEY,
+    display_name TEXT,
+    context TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 MIGRATIONS = [
@@ -99,6 +112,21 @@ MIGRATIONS = [
      "ALTER TABLE messages ADD COLUMN sent_by TEXT"),
     ("attachment_filename_on_edit_pairs",
      "ALTER TABLE edit_pairs ADD COLUMN attachment_filename TEXT"),
+    ("prompt_config_table", """
+        CREATE TABLE IF NOT EXISTS prompt_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("operator_profiles_table", """
+        CREATE TABLE IF NOT EXISTS operator_profiles (
+            operator_name TEXT PRIMARY KEY,
+            display_name TEXT,
+            context TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
 ]
 
 _chroma_client = None

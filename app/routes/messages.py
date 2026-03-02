@@ -188,7 +188,8 @@ async def send_message(
 
 
 @router.post("/conversations/{conversation_id}/regenerate")
-async def regenerate(conversation_id: int, req: RegenerateRequest):
+async def regenerate(conversation_id: int, req: RegenerateRequest, request: Request):
+    operator = get_operator_from_request(request)
     db = await get_db()
     try:
         row = await db.execute(
@@ -206,6 +207,7 @@ async def regenerate(conversation_id: int, req: RegenerateRequest):
             req.trigger_message_id,
             draft_index=req.draft_index,
             operator_instruction=req.operator_instruction,
+            operator_name=operator,
         )
     )
 
@@ -213,7 +215,8 @@ async def regenerate(conversation_id: int, req: RegenerateRequest):
 
 
 @router.post("/conversations/{conversation_id}/suggest")
-async def suggest_followup(conversation_id: int):
+async def suggest_followup(conversation_id: int, request: Request):
+    operator = get_operator_from_request(request)
     db = await get_db()
     try:
         row = await db.execute(
@@ -240,7 +243,7 @@ async def suggest_followup(conversation_id: int):
     from app.services.draft_engine import generate_drafts
 
     asyncio.create_task(
-        generate_drafts(conversation_id, last_msg_id, proactive=True)
+        generate_drafts(conversation_id, last_msg_id, proactive=True, operator_name=operator)
     )
 
     return {"status": "ok"}

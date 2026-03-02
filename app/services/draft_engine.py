@@ -25,48 +25,27 @@ def list_known_attachments() -> list[str]:
         return []
     return sorted(f.name for f in ATTACHMENTS_DIR.iterdir() if f.is_file())
 
-SYSTEM_PROMPT = """Você é o Caio respondendo mensagens de clientes no WhatsApp sobre seus cursos de IA.
 
-## Postura
-- Você é um vendedor consultivo: entende o problema da pessoa e direciona pro curso certo
-- Se o curso não for pra ela, diga isso. Não force venda
-- Seja direto, sem enrolação, mas humano e acessível
-- Nunca minta sobre o que o curso oferece
-- Não ofereça descontos. Quando a pessoa mostrar objeção de preço, mostre valor relativo (custo por dia, ROI, comparação com MBA/bootcamp)
-- Quando a pessoa estiver vaga, qualifique antes de recomendar: pergunte o que ela faz, qual o objetivo, qual a experiência com dados/IA
+# --- Fixed infrastructure sections (not editable via UI) ---
 
-## Tom
-- Direto, informal brasileiro (sem ser coloquial demais)
-- Primeira pessoa, como se fosse o Caio digitando
-- Frases curtas, sem firulas
-- Pode usar "vc", "pra", "tá" naturalmente
-- Sem emojis excessivos (no máximo 1-2 por mensagem quando natural)
-
-## Regras
-- Sempre responda em português brasileiro
-- Se o cliente perguntar algo que você não sabe, diga que vai verificar
-- Nunca invente informações sobre os cursos que não estejam na base de conhecimento
-- Se for a primeira mensagem, foque em entender o que a pessoa precisa antes de vender
-- Se souber o nome do cliente, use-o ocasionalmente de forma natural. Não repita o nome em toda mensagem
-
-## Formatação WhatsApp
+WHATSAPP_FORMAT_SECTION = """## Formatação WhatsApp
 A mensagem será enviada via WhatsApp. Use apenas formatação compatível:
 - *negrito* (asteriscos), _itálico_ (underscores), ~tachado~ (til)
 - Não use markdown, HTML, links clicáveis formatados ou cabeçalhos
 - Quebre linhas para facilitar leitura, mas sem parágrafos longos
-- Listas simples com - ou • quando necessário, sem aninhamento
+- Listas simples com - ou • quando necessário, sem aninhamento"""
 
-## Contexto temporal
+TEMPORAL_CONTEXT_SECTION = """## Contexto temporal
 O prompt inclui timestamps nas mensagens recentes e o horário atual. Use isso para:
 - Se a última mensagem do cliente foi há mais de 1-2 horas, reconheça o atraso de forma natural (sem ser servil). Exemplo: "Desculpa a demora" ou "Voltando aqui"
 - Ajuste o cumprimento ao horário: "Bom dia" / "Boa tarde" / "Boa noite"
 - Se houve um gap grande na conversa, retome o contexto brevemente antes de continuar
-- Não mencione o atraso se foi menos de ~1 hora, isso é normal em WhatsApp
+- Não mencione o atraso se foi menos de ~1 hora, isso é normal em WhatsApp"""
 
-## Anexos
-Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode sugerir o envio de um arquivo junto com a mensagem. Sugira anexo quando o contexto indicar que o cliente está avançando na decisão de compra, pediu detalhes do programa, ou quando os exemplos anteriores mostram que o operador costuma enviar o arquivo nessa situação. Não sugira anexo se a conversa ainda está na fase de qualificação inicial.
+ATTACHMENT_SECTION = """## Anexos
+Quando a seção "Anexos disponíveis" estiver presente no prompt, você pode sugerir o envio de um arquivo junto com a mensagem. Sugira anexo quando o contexto indicar que o cliente está avançando na decisão de compra, pediu detalhes do programa, ou quando os exemplos anteriores mostram que o operador costuma enviar o arquivo nessa situação. Não sugira anexo se a conversa ainda está na fase de qualificação inicial."""
 
-## Formato de resposta
+RESPONSE_FORMAT_SECTION = """## Formato de resposta
 Responda SEMPRE em JSON com exatamente estes campos:
 {
   "draft": "texto da mensagem proposta para o cliente",
@@ -74,11 +53,64 @@ Responda SEMPRE em JSON com exatamente estes campos:
   "suggested_attachment": "nome-do-arquivo.pdf ou null se não houver sugestão"
 }"""
 
-APPROACH_MODIFIERS = [
-    ("direta", "Responda de forma direta e objetiva, indo direto ao ponto."),
-    ("consultiva", "Responda de forma consultiva, fazendo perguntas de qualificação antes de recomendar."),
-    ("casual", "Responda de forma mais casual e acolhedora, priorizando conexão humana."),
-]
+# Keep legacy constant for backward compatibility with tests that reference it
+SYSTEM_PROMPT = None  # Now built dynamically via _build_system_prompt()
+
+APPROACH_MODIFIERS = None  # Now built dynamically via _get_approach_modifiers()
+
+
+async def _build_system_prompt(operator_name: str | None = None) -> str:
+    from app.services.prompt_config import get_all_prompts, PROMPT_DEFAULTS
+    from app.services.operator_profile import get_profile
+
+    prompts = await get_all_prompts()
+
+    # Determine operator display name
+    display_name = operator_name or "Caio"
+    profile_section = ""
+
+    if operator_name:
+        profile = await get_profile(operator_name)
+        if profile:
+            if profile["display_name"]:
+                display_name = profile["display_name"]
+            if profile["context"]:
+                profile_section = f"\n\n## Sobre quem está respondendo\n{profile['context']}"
+
+    opening = f"Você é o {display_name} respondendo mensagens de clientes no WhatsApp sobre cursos de IA."
+
+    system = f"""{opening}
+{profile_section}
+
+## Postura
+{prompts['postura']}
+
+## Tom
+{prompts['tom']}
+
+## Regras
+{prompts['regras']}
+
+{WHATSAPP_FORMAT_SECTION}
+
+{TEMPORAL_CONTEXT_SECTION}
+
+{ATTACHMENT_SECTION}
+
+{RESPONSE_FORMAT_SECTION}"""
+
+    return system
+
+
+async def _get_approach_modifiers() -> list[tuple[str, str]]:
+    from app.services.prompt_config import get_all_prompts
+
+    prompts = await get_all_prompts()
+    return [
+        ("direta", prompts["approach_direta"]),
+        ("consultiva", prompts["approach_consultiva"]),
+        ("casual", prompts["approach_casual"]),
+    ]
 
 
 def _parse_response(response_text: str) -> tuple[str, str, str | None]:
@@ -101,7 +133,7 @@ def _build_rules_section(rules: list[dict]) -> str:
     return f"\n\n## Regras aprendidas\n{items}"
 
 
-async def _build_conversation_history(db, conversation_id: int) -> tuple[str, str, str | None]:
+async def _build_conversation_history(db, conversation_id: int, operator_name: str | None = None) -> tuple[str, str, str | None]:
     row = await db.execute(
         "SELECT contact_name FROM conversations WHERE id = ?",
         (conversation_id,),
@@ -109,6 +141,8 @@ async def _build_conversation_history(db, conversation_id: int) -> tuple[str, st
     conv = await row.fetchone()
     contact_name = (conv["contact_name"] or "") if conv else ""
     first_name = contact_name.split()[0] if contact_name.strip() else ""
+
+    display_name = operator_name or "Caio"
 
     rows = await db.execute(
         "SELECT direction, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
@@ -125,7 +159,7 @@ async def _build_conversation_history(db, conversation_id: int) -> tuple[str, st
     history_lines = []
     last_inbound_time = None
     for i, msg in enumerate(messages):
-        prefix = "Cliente" if msg["direction"] == "inbound" else "Caio"
+        prefix = "Cliente" if msg["direction"] == "inbound" else display_name
         msg_time = datetime.fromisoformat(msg["created_at"])
         if msg_time.tzinfo is None:
             from datetime import timezone as _tz
@@ -215,8 +249,9 @@ async def _build_prompt_parts(
     operator_instruction: str | None = None,
     situation_summary: str | None = None,
     proactive: bool = False,
+    operator_name: str | None = None,
 ):
-    conversation_history, first_name, last_inbound_iso = await _build_conversation_history(db, conversation_id)
+    conversation_history, first_name, last_inbound_iso = await _build_conversation_history(db, conversation_id, operator_name)
 
     # Generate situation summary if not provided
     if situation_summary is None:
@@ -267,8 +302,9 @@ async def _build_prompt_parts(
 
     temporal_section = _build_temporal_context(last_inbound_iso)
 
+    display_name = operator_name or "Caio"
     if proactive:
-        final_instruction = "A última mensagem da conversa foi enviada pelo Caio. Gere uma mensagem de continuação natural, retomando o contexto da conversa."
+        final_instruction = f"A última mensagem da conversa foi enviada pelo {display_name}. Gere uma mensagem de continuação natural, retomando o contexto da conversa."
     else:
         final_instruction = "Gere o draft de resposta para a última mensagem do cliente."
 
@@ -329,8 +365,8 @@ def _validate_suggested_attachment(suggested: str | None) -> str | None:
     return None
 
 
-async def _call_haiku(user_content: str, approach_modifier: str, rules_section: str = "") -> tuple[str, str, str | None]:
-    system = SYSTEM_PROMPT + rules_section + f"\n\n## Estilo desta variação\n{approach_modifier}"
+async def _call_haiku(user_content: str, approach_modifier: str, system_prompt: str, rules_section: str = "") -> tuple[str, str, str | None]:
+    system = system_prompt + rules_section + f"\n\n## Estilo desta variação\n{approach_modifier}"
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
         model=settings.claude_haiku_model,
@@ -348,26 +384,30 @@ async def generate_drafts(
     trigger_message_id: int,
     operator_instruction: str | None = None,
     proactive: bool = False,
+    operator_name: str | None = None,
 ):
     db = await get_db()
     try:
+        system_prompt = await _build_system_prompt(operator_name)
+        approach_modifiers = await _get_approach_modifiers()
+
         user_content, situation_summary, rules_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction, proactive=proactive
+            db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
         )
 
-        full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
+        full_prompt = system_prompt + rules_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         draft_group_id = str(uuid.uuid4())
 
         tasks = [
-            _call_haiku(user_content, modifier, rules_section)
-            for _, modifier in APPROACH_MODIFIERS
+            _call_haiku(user_content, modifier, system_prompt, rules_section)
+            for _, modifier in approach_modifiers
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         drafts = []
-        for i, (approach_name, _) in enumerate(APPROACH_MODIFIERS):
+        for i, (approach_name, _) in enumerate(approach_modifiers):
             if isinstance(results[i], Exception):
                 logger.error("Draft variation %d failed: %s", i, results[i])
                 draft_text = "(Erro ao gerar esta variação)"
@@ -424,18 +464,22 @@ async def regenerate_draft(
     draft_index: int | None = None,
     operator_instruction: str | None = None,
     proactive: bool = False,
+    operator_name: str | None = None,
 ):
     db = await get_db()
     try:
+        system_prompt = await _build_system_prompt(operator_name)
+        approach_modifiers = await _get_approach_modifiers()
+
         user_content, situation_summary, rules_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction, proactive=proactive
+            db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
         )
-        full_prompt = SYSTEM_PROMPT + rules_section + "\n\n" + user_content
+        full_prompt = system_prompt + rules_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
 
         if draft_index is not None:
-            approach_name, modifier = APPROACH_MODIFIERS[draft_index]
-            draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, rules_section)
+            approach_name, modifier = approach_modifiers[draft_index]
+            draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, system_prompt, rules_section)
 
             row = await db.execute(
                 """SELECT id, draft_group_id FROM drafts
@@ -482,11 +526,11 @@ async def regenerate_draft(
                 (draft_group_id,),
             )
 
-            tasks = [_call_haiku(user_content, mod, rules_section) for _, mod in APPROACH_MODIFIERS]
+            tasks = [_call_haiku(user_content, mod, system_prompt, rules_section) for _, mod in approach_modifiers]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             drafts = []
-            for i, (approach_name, _) in enumerate(APPROACH_MODIFIERS):
+            for i, (approach_name, _) in enumerate(approach_modifiers):
                 if isinstance(results[i], Exception):
                     draft_text = "(Erro ao gerar esta variação)"
                     justification = str(results[i])

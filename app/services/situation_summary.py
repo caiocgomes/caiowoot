@@ -17,11 +17,22 @@ O resumo deve descrever:
 Responda APENAS com o texto do resumo, sem formatação extra."""
 
 
+async def _get_summary_prompt() -> str:
+    try:
+        from app.services.prompt_config import get_all_prompts
+        prompts = await get_all_prompts()
+        return prompts.get("summary_prompt", SUMMARY_PROMPT)
+    except Exception:
+        return SUMMARY_PROMPT
+
+
 async def generate_situation_summary(
     conversation_history: str,
     contact_name: str = "",
 ) -> str:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    system = await _get_summary_prompt()
 
     user_content = ""
     if contact_name:
@@ -31,7 +42,7 @@ async def generate_situation_summary(
     response = await client.messages.create(
         model=settings.claude_haiku_model,
         max_tokens=256,
-        system=SUMMARY_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": user_content}],
     )
     return response.content[0].text.strip()
