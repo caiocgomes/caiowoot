@@ -1,19 +1,31 @@
-import json
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.services.situation_summary import generate_situation_summary, SUMMARY_PROMPT
+from app.services.situation_summary import generate_situation_summary, CLASSIFY_TOOL
+
+
+def _make_tool_use_response(summary="Resumo.", product=None, stage=None):
+    """Create a mock response with a tool_use content block."""
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "classify_conversation"
+    tool_block.input = {"summary": summary, "product": product, "stage": stage}
+    mock_response.content = [tool_block]
+    return mock_response
 
 
 @pytest.mark.asyncio
 async def test_generate_summary_calls_haiku():
     with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [
-            AsyncMock(text="Primeiro contato. Cliente viu vídeo e perguntou preço sem contexto.")
-        ]
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client.messages.create = AsyncMock(
+            return_value=_make_tool_use_response(
+                summary="Primeiro contato. Cliente viu vídeo e perguntou preço sem contexto.",
+                product="curso-llm",
+                stage="qualifying",
+            )
+        )
         mock.return_value = mock_client
 
         result = await generate_situation_summary(
@@ -22,23 +34,22 @@ async def test_generate_summary_calls_haiku():
         )
 
         assert result["summary"] == "Primeiro contato. Cliente viu vídeo e perguntou preço sem contexto."
-        assert result["product"] is None  # plain text fallback
-        assert result["stage"] is None
+        assert result["product"] == "curso-llm"
+        assert result["stage"] == "qualifying"
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["system"] == SUMMARY_PROMPT
         assert "Maria" in call_kwargs["messages"][0]["content"]
         assert "Quanto custa o curso?" in call_kwargs["messages"][0]["content"]
-        assert call_kwargs["max_tokens"] == 256
+        assert call_kwargs["tool_choice"] == {"type": "tool", "name": "classify_conversation"}
 
 
 @pytest.mark.asyncio
 async def test_generate_summary_without_contact_name():
     with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [AsyncMock(text="Primeiro contato genérico.")]
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client.messages.create = AsyncMock(
+            return_value=_make_tool_use_response(summary="Primeiro contato genérico.")
+        )
         mock.return_value = mock_client
 
         result = await generate_situation_summary("Cliente: Oi")
@@ -49,13 +60,38 @@ async def test_generate_summary_without_contact_name():
 
 
 @pytest.mark.asyncio
-async def test_generate_summary_strips_whitespace():
+async def test_generate_summary_null_product_stage():
     with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [AsyncMock(text="  Resumo com espaços.  \n")]
+        mock_client.messages.create = AsyncMock(
+            return_value=_make_tool_use_response(
+                summary="Primeiro contato sem produto identificado.",
+                product=None,
+                stage=None,
+            )
+        )
+        mock.return_value = mock_client
+
+        result = await generate_situation_summary("Cliente: Oi")
+        assert result["summary"] == "Primeiro contato sem produto identificado."
+        assert result["product"] is None
+        assert result["stage"] is None
+
+
+@pytest.mark.asyncio
+async def test_generate_summary_fallback_no_tool_block():
+    """If response has no tool_use block, returns empty fallback."""
+    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = "Some plain text"
+        mock_response.content = [text_block]
         mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock.return_value = mock_client
 
         result = await generate_situation_summary("Cliente: Oi")
-        assert result["summary"] == "Resumo com espaços."
+        assert result["summary"] == ""
+        assert result["product"] is None
+        assert result["stage"] is None

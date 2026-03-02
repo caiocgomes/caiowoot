@@ -1124,11 +1124,18 @@ async function classifyConversation() {
         { funnel_product: data.product, funnel_stage: data.stage },
         data.summary,
       );
+    } else {
+      console.error("Classify failed:", res.status);
+      btn.textContent = "Erro - tentar de novo";
+      return;
     }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Atualizar";
+  } catch (e) {
+    console.error("Classify error:", e);
+    btn.textContent = "Erro - tentar de novo";
+    return;
   }
+  btn.disabled = false;
+  btn.textContent = "Atualizar";
 }
 
 async function updateFunnelStage(stage) {

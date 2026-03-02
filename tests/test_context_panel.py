@@ -1,9 +1,18 @@
-import json
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 from app.services.situation_summary import generate_situation_summary
 from tests.conftest import make_webhook_payload
+
+
+def _make_tool_use_response(summary="Resumo.", product=None, stage=None):
+    mock_response = MagicMock()
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "classify_conversation"
+    tool_block.input = {"summary": summary, "product": product, "stage": stage}
+    mock_response.content = [tool_block]
+    return mock_response
 
 
 async def _create_conversation_with_inbound(client, db):
@@ -19,18 +28,16 @@ async def _create_conversation_with_inbound(client, db):
 
 @pytest.mark.asyncio
 async def test_summary_returns_structured_json():
-    """5.1: generate_situation_summary returns structured JSON with product and stage."""
+    """5.1: generate_situation_summary returns structured output with product and stage."""
     with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [
-            AsyncMock(text=json.dumps({
-                "summary": "Primeiro contato. Cliente perguntou sobre curso de LLM.",
-                "product": "curso-llm",
-                "stage": "qualifying",
-            }))
-        ]
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client.messages.create = AsyncMock(
+            return_value=_make_tool_use_response(
+                summary="Primeiro contato. Cliente perguntou sobre curso de LLM.",
+                product="curso-llm",
+                stage="qualifying",
+            )
+        )
         mock.return_value = mock_client
 
         result = await generate_situation_summary("Cliente: Quero saber sobre o curso de LLM")
@@ -41,20 +48,21 @@ async def test_summary_returns_structured_json():
 
 
 @pytest.mark.asyncio
-async def test_summary_graceful_fallback_on_parse_failure():
-    """5.2: generate_situation_summary graceful fallback when JSON parse fails."""
+async def test_summary_graceful_fallback_no_tool_block():
+    """5.2: generate_situation_summary fallback when no tool_use block in response."""
     with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
         mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.content = [
-            AsyncMock(text="Primeiro contato. Texto livre sem JSON.")
-        ]
+        mock_response = MagicMock()
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = "Primeiro contato. Texto livre."
+        mock_response.content = [text_block]
         mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock.return_value = mock_client
 
         result = await generate_situation_summary("Cliente: Oi")
 
-        assert result["summary"] == "Primeiro contato. Texto livre sem JSON."
+        assert result["summary"] == ""
         assert result["product"] is None
         assert result["stage"] is None
 
