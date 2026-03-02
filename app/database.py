@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     phone_number TEXT NOT NULL UNIQUE,
     contact_name TEXT,
     status TEXT DEFAULT 'active',
+    last_read_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -127,6 +128,8 @@ MIGRATIONS = [
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """),
+    ("last_read_at_on_conversations",
+     "ALTER TABLE conversations ADD COLUMN last_read_at TIMESTAMP"),
 ]
 
 _chroma_client = None

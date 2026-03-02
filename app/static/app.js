@@ -72,7 +72,7 @@ function renderConversationList(conversations) {
     const div = document.createElement("div");
     div.className = "conv-item" +
       (conv.id === currentConversationId ? " active" : "") +
-      (conv.has_unread ? " unread" : "");
+      (conv.is_new ? " is-new" : conv.needs_reply ? " needs-reply" : "");
     div.onclick = () => { openConversation(conv.id); closeSidebar(); };
 
     const name = conv.contact_name || conv.phone_number;
@@ -87,9 +87,11 @@ function renderConversationList(conversations) {
       ? `<div class="conv-responder">${escapeHtml(conv.last_responder)}</div>`
       : "";
 
+    const dot = conv.is_new ? '<span class="conv-new-dot"></span>' : "";
+
     div.innerHTML = `
       <span class="conv-time">${time}</span>
-      <div class="conv-name">${escapeHtml(name)}</div>
+      <div class="conv-name">${dot}${escapeHtml(name)}</div>
       <div class="conv-preview">${escapeHtml(preview)}</div>
       ${responder}
     `;

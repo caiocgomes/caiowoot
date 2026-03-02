@@ -17,12 +17,13 @@ async def list_conversations():
                 CASE WHEN EXISTS (
                     SELECT 1 FROM messages m2
                     WHERE m2.conversation_id = c.id AND m2.direction = 'inbound'
-                    AND m2.created_at > COALESCE(
-                        (SELECT MAX(m3.created_at) FROM messages m3
-                         WHERE m3.conversation_id = c.id AND m3.direction = 'outbound'),
-                        '1970-01-01'
-                    )
-                ) THEN 1 ELSE 0 END as has_unread,
+                    AND m2.created_at > COALESCE(c.last_read_at, '1970-01-01')
+                ) THEN 1 ELSE 0 END as is_new,
+                CASE WHEN (
+                    SELECT m6.direction FROM messages m6
+                    WHERE m6.conversation_id = c.id
+                    ORDER BY m6.created_at DESC, m6.id DESC LIMIT 1
+                ) = 'inbound' THEN 1 ELSE 0 END as needs_reply,
                 (SELECT m5.sent_by FROM messages m5
                  WHERE m5.conversation_id = c.id AND m5.direction = 'outbound' AND m5.sent_by IS NOT NULL
                  ORDER BY m5.created_at DESC LIMIT 1
@@ -46,6 +47,13 @@ async def list_conversations():
 async def get_conversation(conversation_id: int):
     db = await get_db()
     try:
+        # Mark as read
+        await db.execute(
+            "UPDATE conversations SET last_read_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (conversation_id,),
+        )
+        await db.commit()
+
         # Get conversation
         row = await db.execute(
             "SELECT * FROM conversations WHERE id = ?",
