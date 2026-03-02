@@ -5,6 +5,7 @@ let currentDrafts = [];
 let selectedDraftIndex = null;
 let regenerationCount = 0;
 let attachedFile = null;
+let lastTriggerMessageId = null;
 let ws = null;
 
 // --- Auth: intercept 401 responses ---
@@ -38,6 +39,9 @@ function handleWSEvent(data) {
     loadConversations();
     if (data.conversation_id === currentConversationId) {
       appendMessage(data.message);
+      if (data.message.direction === "inbound") {
+        lastTriggerMessageId = data.message.id;
+      }
     }
   } else if (data.type === "drafts_ready") {
     console.log("drafts_ready received, drafts count:", data.drafts?.length, "match:", data.conversation_id === currentConversationId);
@@ -125,23 +129,20 @@ async function openConversation(id) {
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
 
+  // Track last message ID for regeneration fallback
+  const msgs = data.messages;
+  const lastInbound = [...msgs].reverse().find(m => m.direction === "inbound");
+  lastTriggerMessageId = lastInbound ? lastInbound.id : (msgs.length > 0 ? msgs[msgs.length - 1].id : null);
+
   // Reset compose
   document.getElementById("draft-input").value = "";
   document.getElementById("justification").style.display = "none";
   document.getElementById("justification").textContent = "";
   document.getElementById("draft-cards-container").style.display = "none";
-  document.getElementById("instruction-bar").style.display = "none";
   document.getElementById("attachment-bar").style.display = "none";
-  document.getElementById("suggest-btn").style.display = "none";
 
   if (data.pending_drafts && data.pending_drafts.length > 0) {
     showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
-  } else {
-    // Show suggest button if last message is outbound
-    const msgs = data.messages;
-    if (msgs.length > 0 && msgs[msgs.length - 1].direction === "outbound") {
-      document.getElementById("suggest-btn").style.display = "block";
-    }
   }
 
   loadConversations();
@@ -164,7 +165,6 @@ function appendMessage(msg) {
 
 // --- Draft Variations ---
 function showDrafts(drafts, groupId) {
-  document.getElementById("suggest-btn").style.display = "none";
   currentDrafts = drafts;
   currentDraftGroupId = groupId;
   selectedDraftIndex = null;
@@ -240,7 +240,6 @@ function showDrafts(drafts, groupId) {
   }
 
   container.style.display = "block";
-  document.getElementById("instruction-bar").style.display = "block";
 
   // Auto-select first draft (on mobile, pills don't show text so this is essential)
   if (drafts.length > 0) {
@@ -290,10 +289,10 @@ async function pollForUpdatedDrafts(convId) {
 }
 
 async function regenerateDraft(index) {
-  if (!currentConversationId || currentDrafts.length === 0) return;
+  if (!currentConversationId) return;
+  const triggerId = currentDrafts[0]?.trigger_message_id || lastTriggerMessageId;
+  if (!triggerId) return;
   regenerationCount++;
-
-  const triggerId = currentDrafts[0].trigger_message_id;
   const instruction = document.getElementById("instruction-input").value.trim() || null;
   const convId = currentConversationId;
 
@@ -311,10 +310,10 @@ async function regenerateDraft(index) {
 }
 
 async function regenerateAll() {
-  if (!currentConversationId || currentDrafts.length === 0) return;
+  if (!currentConversationId) return;
+  const triggerId = currentDrafts[0]?.trigger_message_id || lastTriggerMessageId;
+  if (!triggerId) return;
   regenerationCount++;
-
-  const triggerId = currentDrafts[0].trigger_message_id;
   const instruction = document.getElementById("instruction-input").value.trim() || null;
   const convId = currentConversationId;
 
@@ -411,7 +410,6 @@ async function sendMessage() {
     removeAttachment();
     document.getElementById("justification").style.display = "none";
     document.getElementById("draft-cards-container").style.display = "none";
-    document.getElementById("instruction-bar").style.display = "none";
     document.getElementById("instruction-input").value = "";
   } finally {
     btn.disabled = false;
@@ -888,31 +886,6 @@ async function createDoc() {
   } else {
     const err = await res.json();
     alert(`Erro ao criar: ${err.detail || "erro desconhecido"}`);
-  }
-}
-
-// --- Proactive Suggest ---
-async function requestSuggestion() {
-  if (!currentConversationId) return;
-  const btn = document.getElementById("suggest-btn");
-  btn.disabled = true;
-  btn.textContent = "Gerando sugestões...";
-
-  try {
-    const res = await fetch(`/conversations/${currentConversationId}/suggest`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(`Erro: ${err.detail || "erro desconhecido"}`);
-      btn.disabled = false;
-      btn.textContent = "Sugerir resposta";
-    }
-    // On success, drafts will arrive via WebSocket (drafts_ready event)
-    // which calls showDrafts() and hides the suggest button
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = "Sugerir resposta";
   }
 }
 
