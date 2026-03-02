@@ -155,7 +155,7 @@ async function openConversation(id) {
   renderContextPanel(conv, data.situation_summary);
 
   // Auto-classify if no funnel data exists yet
-  if (!conv.funnel_product && !conv.funnel_stage && !data.situation_summary) {
+  if (!conv.funnel_product && !conv.funnel_stage) {
     classifyConversation();
   }
 
