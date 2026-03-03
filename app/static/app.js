@@ -598,6 +598,7 @@ function openReviewItem(id) {
   hideReviewDetail();
   document.getElementById("review-detail").style.display = "flex";
   document.getElementById("main-empty").style.display = "none";
+  if (isMobile()) document.body.classList.add("mobile-chat-active");
 
   document.getElementById("review-detail-situation").textContent =
     ann.situation_summary || "Sem resumo de situação";
@@ -620,6 +621,14 @@ function openReviewItem(id) {
 
 function hideReviewDetail() {
   document.getElementById("review-detail").style.display = "none";
+}
+
+function reviewGoBack() {
+  currentReviewItemId = null;
+  hideReviewDetail();
+  document.body.classList.remove("mobile-chat-active");
+  document.getElementById("main-empty").style.display = "flex";
+  document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
 }
 
 async function validateAnnotation() {
@@ -670,6 +679,7 @@ async function confirmPromote() {
 function afterReviewAction() {
   currentReviewItemId = null;
   hideReviewDetail();
+  if (isMobile()) document.body.classList.remove("mobile-chat-active");
   document.getElementById("main-empty").style.display = "flex";
   document.getElementById("main-empty").textContent = "Anotação processada";
   loadReviewItems();
