@@ -130,6 +130,7 @@ async function openConversation(id) {
 
   const messagesEl = document.getElementById("messages");
   messagesEl.innerHTML = "";
+  lastMessageDate = null;
   for (const msg of data.messages) {
     appendMessage(msg);
   }
@@ -164,6 +165,19 @@ async function openConversation(id) {
 
 function appendMessage(msg) {
   const messagesEl = document.getElementById("messages");
+
+  // Date separator
+  if (msg.created_at) {
+    const msgDate = new Date(normalizeTimestamp(msg.created_at)).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    if (msgDate !== lastMessageDate) {
+      const sep = document.createElement("div");
+      sep.className = "date-separator";
+      sep.innerHTML = `<span>${formatDateSeparator(msg.created_at)}</span>`;
+      messagesEl.appendChild(sep);
+      lastMessageDate = msgDate;
+    }
+  }
+
   const div = document.createElement("div");
   div.className = `msg ${msg.direction}`;
   div.textContent = msg.content;
@@ -172,6 +186,12 @@ function appendMessage(msg) {
     badge.style.cssText = "font-size:11px;color:#888;margin-top:4px;";
     badge.textContent = `[${msg.media_type === "image" ? "Imagem" : "Documento"} anexado]`;
     div.appendChild(badge);
+  }
+  if (msg.created_at) {
+    const timeEl = document.createElement("span");
+    timeEl.className = "msg-time";
+    timeEl.textContent = formatTimeShort(msg.created_at);
+    div.appendChild(timeEl);
   }
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -473,12 +493,7 @@ function escapeHtml(text) {
 }
 
 function formatTime(dateStr) {
-  // DB timestamps are UTC; normalize so JS parses them correctly
-  const normalized =
-    dateStr.includes("+") || dateStr.includes("Z")
-      ? dateStr
-      : dateStr.replace(" ", "T") + "Z";
-  const date = new Date(normalized);
+  const date = new Date(normalizeTimestamp(dateStr));
   const tz = "America/Sao_Paulo";
 
   const todayStr = new Date().toLocaleDateString("pt-BR", { timeZone: tz });
@@ -498,6 +513,36 @@ function formatTime(dateStr) {
     timeZone: tz,
   });
 }
+
+function normalizeTimestamp(dateStr) {
+  return dateStr.includes("+") || dateStr.includes("Z")
+    ? dateStr
+    : dateStr.replace(" ", "T") + "Z";
+}
+
+function formatTimeShort(dateStr) {
+  const date = new Date(normalizeTimestamp(dateStr));
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
+function formatDateSeparator(dateStr) {
+  const date = new Date(normalizeTimestamp(dateStr));
+  const tz = "America/Sao_Paulo";
+  const todayStr = new Date().toLocaleDateString("pt-BR", { timeZone: tz });
+  const dateStr2 = date.toLocaleDateString("pt-BR", { timeZone: tz });
+  if (todayStr === dateStr2) return "Hoje";
+  return date.toLocaleDateString("pt-BR", {
+    day: "numeric",
+    month: "long",
+    timeZone: tz,
+  });
+}
+
+var lastMessageDate = null;
 
 // --- Sidebar toggle (mobile) ---
 function isMobile() {
