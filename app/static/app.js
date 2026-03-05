@@ -19,19 +19,47 @@ window.fetch = async (...args) => {
 };
 
 // --- WebSocket ---
+var wsPingInterval = null;
+
 function connectWS() {
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  if (ws) { try { ws.close(); } catch(e) {} }
+
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    clearInterval(wsPingInterval);
+    wsPingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("ping");
+      }
+    }, 30000);
+  };
 
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     handleWSEvent(data);
   };
 
+  ws.onerror = () => {
+    ws.close();
+  };
+
   ws.onclose = () => {
+    clearInterval(wsPingInterval);
     setTimeout(connectWS, 2000);
   };
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      connectWS();
+    }
+    loadConversations();
+  }
+});
 
 function handleWSEvent(data) {
   console.log("WS event:", data.type, "conv:", data.conversation_id, "current:", currentConversationId);
