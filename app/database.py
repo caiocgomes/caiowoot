@@ -136,6 +136,48 @@ MIGRATIONS = [
      "ALTER TABLE conversations ADD COLUMN funnel_product TEXT"),
     ("funnel_stage_on_conversations",
      "ALTER TABLE conversations ADD COLUMN funnel_stage TEXT"),
+    ("analysis_runs_table", """
+        CREATE TABLE IF NOT EXISTS analysis_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period_start TEXT NOT NULL,
+            period_end TEXT NOT NULL,
+            status TEXT DEFAULT 'running',
+            total_conversations INTEGER DEFAULT 0,
+            total_operators INTEGER DEFAULT 0,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
+        )
+    """),
+    ("conversation_assessments_table", """
+        CREATE TABLE IF NOT EXISTS conversation_assessments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            analysis_run_id INTEGER NOT NULL REFERENCES analysis_runs(id),
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            operator_name TEXT,
+            engagement_level TEXT,
+            sale_status TEXT,
+            recovery_potential TEXT,
+            recovery_suggestion TEXT,
+            factual_issues_json TEXT,
+            overall_assessment TEXT,
+            metrics_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("operator_digests_table", """
+        CREATE TABLE IF NOT EXISTS operator_digests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            analysis_run_id INTEGER NOT NULL REFERENCES analysis_runs(id),
+            operator_name TEXT NOT NULL,
+            summary TEXT,
+            patterns_json TEXT,
+            factual_issues_json TEXT,
+            salvageable_sales_json TEXT,
+            metrics_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
 ]
 
 _chroma_client = None

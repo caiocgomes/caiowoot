@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaioWoot - Coaching</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+
+.header { background: #fff; border-bottom: 1px solid #ddd; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-actions { display: flex; gap: 12px; align-items: center; }
+.header a { color: #666; text-decoration: none; font-size: 14px; }
+.header a:hover { color: #333; }
+
+.controls { background: #fff; border-bottom: 1px solid #ddd; padding: 12px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.controls label { font-size: 13px; color: #666; }
+.controls input[type="date"] { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; }
+.controls select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 600; }
+.btn-primary { background: #25D366; color: #fff; }
+.btn-primary:hover { background: #1da851; }
+.btn-primary:disabled { background: #ccc; cursor: default; }
+
+.content { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+.status-bar { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; display: none; }
+.status-bar.error { background: #f8d7da; border-color: #f5c6cb; }
+.status-bar.success { background: #d4edda; border-color: #c3e6cb; }
+
+.section { background: #fff; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; }
+.section-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.section-body { padding: 16px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.badge-red { background: #f8d7da; color: #721c24; }
+.badge-yellow { background: #fff3cd; color: #856404; }
+.badge-green { background: #d4edda; color: #155724; }
+.badge-gray { background: #e9ecef; color: #495057; }
+.badge-blue { background: #d1ecf1; color: #0c5460; }
+
+.salvageable-item { padding: 12px; border-bottom: 1px solid #eee; }
+.salvageable-item:last-child { border-bottom: none; }
+.salvageable-name { font-weight: 600; font-size: 14px; }
+.salvageable-situation { font-size: 13px; color: #555; margin-top: 4px; }
+.salvageable-suggestion { font-size: 13px; color: #1565c0; margin-top: 4px; }
+.salvageable-link { font-size: 12px; color: #25D366; text-decoration: none; margin-top: 4px; display: inline-block; }
+
+.unanswered-item { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+.unanswered-item:last-child { border-bottom: none; }
+
+.operator-section { margin-bottom: 16px; }
+.operator-header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.operator-name { font-size: 16px; font-weight: 600; }
+.operator-metrics { display: flex; gap: 16px; }
+.metric { text-align: center; }
+.metric-value { font-size: 18px; font-weight: 700; }
+.metric-label { font-size: 11px; color: #888; text-transform: uppercase; }
+
+.operator-summary { padding: 12px 16px; font-size: 14px; line-height: 1.6; color: #333; border-bottom: 1px solid #eee; }
+
+.pattern-item { padding: 12px 16px; border-bottom: 1px solid #eee; }
+.pattern-item:last-child { border-bottom: none; }
+.pattern-desc { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.pattern-examples { font-size: 13px; color: #555; margin-bottom: 4px; padding-left: 16px; }
+.pattern-suggestion { font-size: 13px; color: #1565c0; font-style: italic; }
+
+.factual-item { padding: 8px 16px; border-bottom: 1px solid #eee; font-size: 13px; }
+.factual-item:last-child { border-bottom: none; }
+
+.empty-state { padding: 40px; text-align: center; color: #999; font-size: 14px; }
+
+.run-info { font-size: 12px; color: #888; }
+
+/* Conversation assessments */
+.assessments-toggle { padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: #1565c0; border-bottom: 1px solid #eee; user-select: none; display: flex; align-items: center; gap: 6px; }
+.assessments-toggle:hover { background: #f8f9fa; }
+.assessments-toggle .arrow { transition: transform 0.2s; font-size: 10px; }
+.assessments-toggle .arrow.open { transform: rotate(90deg); }
+.assessments-list { display: none; }
+.assessments-list.open { display: block; }
+
+.assessment-item { padding: 12px 16px; border-bottom: 1px solid #eee; }
+.assessment-item:last-child { border-bottom: none; }
+.assessment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.assessment-contact { font-weight: 600; font-size: 14px; }
+.assessment-badges { display: flex; gap: 4px; }
+.assessment-text { font-size: 13px; color: #555; line-height: 1.5; margin-top: 4px; }
+.assessment-metrics { font-size: 12px; color: #888; margin-top: 4px; }
+.assessment-recovery { font-size: 13px; color: #1565c0; margin-top: 4px; }
+.assessment-factual { margin-top: 6px; padding: 6px 8px; background: #fff5f5; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Coaching</h1>
+    <div class="header-actions">
+        <span class="run-info" id="run-info"></span>
+        <a href="/">Voltar</a>
+    </div>
+</div>
+
+<div class="controls">
+    <label>De:</label>
+    <input type="date" id="period-start">
+    <label>Ate:</label>
+    <input type="date" id="period-end">
+    <label>Operador:</label>
+    <select id="operator-filter" onchange="applyFilter()">
+        <option value="">Todos</option>
+    </select>
+    <button class="btn btn-primary" id="run-btn" onclick="triggerAnalysis()">Rodar analise</button>
+</div>
+
+<div class="content">
+    <div class="status-bar" id="status-bar"></div>
+
+    <div id="results" style="display:none;">
+        <!-- Salvageable sales -->
+        <div class="section" id="salvageable-section" style="display:none;">
+            <div class="section-header">
+                <span class="badge badge-red">ACAO</span>
+                Vendas para salvar
+            </div>
+            <div class="section-body" id="salvageable-list"></div>
+        </div>
+
+        <!-- Unanswered -->
+        <div class="section" id="unanswered-section" style="display:none;">
+            <div class="section-header">
+                <span class="badge badge-yellow">ATENCAO</span>
+                Conversas sem resposta
+            </div>
+            <div class="section-body" id="unanswered-list"></div>
+        </div>
+
+        <!-- Operator digests -->
+        <div id="operator-digests"></div>
+    </div>
+
+    <div class="empty-state" id="empty-state">
+        Nenhuma analise rodada ainda. Selecione o periodo e clique em "Rodar analise".
+    </div>
+</div>
+
+<script>
+let _lastData = null;
+
+// Set default dates
+const today = new Date();
+const weekAgo = new Date(today);
+weekAgo.setDate(weekAgo.getDate() - 7);
+document.getElementById('period-start').value = weekAgo.toISOString().split('T')[0];
+document.getElementById('period-end').value = today.toISOString().split('T')[0];
+
+loadResults();
+
+async function loadResults() {
+    try {
+        const resp = await fetch('/admin/analysis/results');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.run) {
+            _lastData = data;
+            populateOperatorFilter(data);
+            renderResults(data);
+        }
+    } catch (e) {
+        console.error('Failed to load results:', e);
+    }
+}
+
+function populateOperatorFilter(data) {
+    const select = document.getElementById('operator-filter');
+    const current = select.value;
+    select.innerHTML = '<option value="">Todos</option>';
+    const operators = new Set();
+    for (const d of (data.operator_digests || [])) {
+        operators.add(d.operator_name);
+    }
+    for (const op of operators) {
+        const opt = document.createElement('option');
+        opt.value = op;
+        opt.textContent = op;
+        select.appendChild(opt);
+    }
+    select.value = current;
+}
+
+function applyFilter() {
+    if (_lastData) renderResults(_lastData);
+}
+
+async function triggerAnalysis() {
+    const btn = document.getElementById('run-btn');
+    const periodStart = document.getElementById('period-start').value;
+    const periodEnd = document.getElementById('period-end').value;
+
+    if (!periodStart || !periodEnd) {
+        showStatus('Selecione o periodo.', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Rodando...';
+    showStatus('Analise iniciada. Isso pode levar alguns minutos...', '');
+
+    try {
+        const resp = await fetch('/admin/analysis/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ period_start: periodStart, period_end: periodEnd }),
+        });
+        const data = await resp.json();
+        if (data.run_id) pollStatus(data.run_id);
+    } catch (e) {
+        showStatus('Erro ao iniciar analise: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Rodar analise';
+    }
+}
+
+async function pollStatus(runId) {
+    const btn = document.getElementById('run-btn');
+    const poll = async () => {
+        try {
+            const resp = await fetch(`/admin/analysis/status/${runId}`);
+            const data = await resp.json();
+            if (data.status === 'completed') {
+                showStatus('Analise concluida!', 'success');
+                btn.disabled = false;
+                btn.textContent = 'Rodar analise';
+                loadResults();
+            } else if (data.status === 'failed') {
+                showStatus('Analise falhou: ' + (data.error_message || 'erro desconhecido'), 'error');
+                btn.disabled = false;
+                btn.textContent = 'Rodar analise';
+            } else {
+                showStatus(`Analisando... ${data.assessments_completed} conversas processadas`, '');
+                setTimeout(poll, 3000);
+            }
+        } catch (e) {
+            setTimeout(poll, 5000);
+        }
+    };
+    setTimeout(poll, 2000);
+}
+
+function showStatus(msg, type) {
+    const bar = document.getElementById('status-bar');
+    bar.textContent = msg;
+    bar.className = 'status-bar' + (type ? ' ' + type : '');
+    bar.style.display = 'block';
+    if (type === 'success') setTimeout(() => { bar.style.display = 'none'; }, 5000);
+}
+
+function renderResults(data) {
+    const filterOp = document.getElementById('operator-filter').value;
+
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    // Run info
+    const run = data.run;
+    document.getElementById('run-info').textContent =
+        `Periodo: ${run.period_start} a ${run.period_end} | ${run.total_conversations} conversas, ${run.total_operators} operadores`;
+
+    // Salvageable sales (filtered)
+    const salvSection = document.getElementById('salvageable-section');
+    const salvList = document.getElementById('salvageable-list');
+    salvList.innerHTML = '';
+    const filteredSales = filterOp
+        ? (data.salvageable_sales || []).filter(s => {
+            // Match sales to operator via assessments_by_operator
+            const opAssessments = (data.assessments_by_operator || {})[filterOp] || [];
+            return opAssessments.some(a => a.conversation_id === s.conversation_id);
+          })
+        : (data.salvageable_sales || []);
+
+    if (filteredSales.length > 0) {
+        salvSection.style.display = 'block';
+        for (const sale of filteredSales) {
+            const priority = sale.priority || 'medium';
+            const badgeClass = priority === 'high' ? 'badge-red' : 'badge-yellow';
+            salvList.innerHTML += `
+                <div class="salvageable-item">
+                    <div>
+                        <span class="badge ${badgeClass}">${priority.toUpperCase()}</span>
+                        <span class="salvageable-name">${escHtml(sale.contact_name || 'Conv #' + sale.conversation_id)}</span>
+                    </div>
+                    <div class="salvageable-situation">${escHtml(sale.situation || '')}</div>
+                    <div class="salvageable-suggestion">Sugestao: ${escHtml(sale.suggestion || '')}</div>
+                    ${sale.conversation_id ? `<a class="salvageable-link" href="/?conv=${sale.conversation_id}">Abrir conversa</a>` : ''}
+                </div>
+            `;
+        }
+    } else {
+        salvSection.style.display = 'none';
+    }
+
+    // Unanswered (hide when filtering by operator)
+    const unSection = document.getElementById('unanswered-section');
+    const unList = document.getElementById('unanswered-list');
+    unList.innerHTML = '';
+    if (!filterOp && data.unanswered && data.unanswered.length > 0) {
+        unSection.style.display = 'block';
+        for (const u of data.unanswered) {
+            unList.innerHTML += `
+                <div class="unanswered-item">
+                    <strong>${escHtml(u.contact_name || 'Conv #' + u.id)}</strong>:
+                    "${escHtml((u.last_inbound_message || '').substring(0, 100))}"
+                    <span style="color:#999">(${u.last_inbound_at || ''})</span>
+                </div>
+            `;
+        }
+    } else {
+        unSection.style.display = 'none';
+    }
+
+    // Operator digests
+    const digestsContainer = document.getElementById('operator-digests');
+    digestsContainer.innerHTML = '';
+
+    const digests = (data.operator_digests || []).filter(d => !filterOp || d.operator_name === filterOp);
+
+    for (const digest of digests) {
+        const opName = digest.operator_name;
+        const metrics = digest.metrics || {};
+        const acceptRate = metrics.avg_draft_acceptance_rate != null
+            ? Math.round(metrics.avg_draft_acceptance_rate) + '%'
+            : 'N/A';
+        const statusDist = metrics.sale_status_distribution || {};
+        const converted = statusDist.converted || 0;
+
+        let patternsHtml = '';
+        for (const p of (digest.patterns || [])) {
+            const examplesHtml = (p.examples || []).map(e => `<div class="pattern-examples">- ${escHtml(e)}</div>`).join('');
+            patternsHtml += `
+                <div class="pattern-item">
+                    <div class="pattern-desc">${escHtml(p.pattern)}</div>
+                    ${examplesHtml}
+                    <div class="pattern-suggestion">${escHtml(p.suggestion || '')}</div>
+                </div>
+            `;
+        }
+
+        let factualHtml = '';
+        for (const f of (digest.factual_issues || [])) {
+            factualHtml += `
+                <div class="factual-item">
+                    <span class="badge badge-red">ERRO</span>
+                    <strong>${escHtml(f.contact_name || 'Conv #' + f.conversation_id)}</strong>:
+                    ${escHtml(f.issue || '')}
+                </div>
+            `;
+        }
+
+        // Individual conversation assessments
+        const opAssessments = (data.assessments_by_operator || {})[opName] || [];
+        let assessmentsHtml = '';
+        if (opAssessments.length > 0) {
+            let itemsHtml = '';
+            for (const a of opAssessments) {
+                const engBadge = engagementBadge(a.engagement_level);
+                const statusBadge = saleStatusBadge(a.sale_status);
+                const m = a.metrics || {};
+                const acceptPct = m.draft_acceptance_rate != null ? Math.round(m.draft_acceptance_rate) + '% aceitas s/ editar' : '';
+                const rt = (m.response_times || []);
+                const avgRt = rt.length ? Math.round(rt.reduce((a,b)=>a+b,0)/rt.length) + 'min resp.' : '';
+                const metricsLine = [acceptPct, avgRt].filter(Boolean).join(' | ');
+
+                let factualAlert = '';
+                if (a.factual_issues && a.factual_issues.length > 0) {
+                    const issues = a.factual_issues.map(f =>
+                        `<div><strong>${escHtml(f.claim)}</strong> → ${escHtml(f.knowledge_says)} <span class="badge badge-${f.severity === 'high' ? 'red' : 'yellow'}">${f.severity}</span></div>`
+                    ).join('');
+                    factualAlert = `<div class="assessment-factual">${issues}</div>`;
+                }
+
+                let recoveryHtml = '';
+                if (a.recovery_suggestion && a.recovery_potential && a.recovery_potential !== 'none') {
+                    recoveryHtml = `<div class="assessment-recovery">Recuperacao (${a.recovery_potential}): ${escHtml(a.recovery_suggestion)}</div>`;
+                }
+
+                itemsHtml += `
+                    <div class="assessment-item">
+                        <div class="assessment-header">
+                            <span class="assessment-contact">
+                                ${escHtml(a.contact_name || 'Conv #' + a.conversation_id)}
+                                <a class="salvageable-link" href="/?conv=${a.conversation_id}" style="margin-left:8px">abrir</a>
+                            </span>
+                            <div class="assessment-badges">${engBadge} ${statusBadge}</div>
+                        </div>
+                        <div class="assessment-text">${escHtml(a.overall_assessment || '')}</div>
+                        ${metricsLine ? `<div class="assessment-metrics">${metricsLine}</div>` : ''}
+                        ${factualAlert}
+                        ${recoveryHtml}
+                    </div>
+                `;
+            }
+
+            const toggleId = 'toggle-' + opName.replace(/\s/g, '-');
+            assessmentsHtml = `
+                <div class="assessments-toggle" onclick="toggleAssessments('${toggleId}')">
+                    <span class="arrow" id="arrow-${toggleId}">&#9654;</span>
+                    Ver ${opAssessments.length} conversas analisadas
+                </div>
+                <div class="assessments-list" id="${toggleId}">
+                    ${itemsHtml}
+                </div>
+            `;
+        }
+
+        digestsContainer.innerHTML += `
+            <div class="section operator-section">
+                <div class="operator-header">
+                    <span class="operator-name">${escHtml(opName)}</span>
+                    <div class="operator-metrics">
+                        <div class="metric">
+                            <div class="metric-value">${metrics.total_conversations || 0}</div>
+                            <div class="metric-label">Conversas</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${metrics.total_messages || 0}</div>
+                            <div class="metric-label">Mensagens</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${acceptRate}</div>
+                            <div class="metric-label">Aceitas s/ editar</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${converted}</div>
+                            <div class="metric-label">Vendas</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="operator-summary">${escHtml(digest.summary || '')}</div>
+                ${factualHtml ? `<div class="section-header"><span class="badge badge-red">ERROS</span> Erros factuais</div>${factualHtml}` : ''}
+                ${patternsHtml ? `<div class="section-header"><span class="badge badge-gray">PADROES</span> Padroes identificados</div>${patternsHtml}` : ''}
+                ${assessmentsHtml}
+            </div>
+        `;
+    }
+
+    if (digests.length === 0) {
+        digestsContainer.innerHTML = '<div class="empty-state">Nenhum operador com atividade no periodo.</div>';
+    }
+}
+
+function toggleAssessments(id) {
+    const list = document.getElementById(id);
+    const arrow = document.getElementById('arrow-' + id);
+    const isOpen = list.classList.toggle('open');
+    arrow.classList.toggle('open', isOpen);
+}
+
+function engagementBadge(level) {
+    const map = { high: ['badge-green', 'HIGH'], medium: ['badge-yellow', 'MEDIUM'], low: ['badge-red', 'LOW'] };
+    const [cls, label] = map[level] || ['badge-gray', level || '?'];
+    return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function saleStatusBadge(status) {
+    const map = {
+        active: ['badge-green', 'ATIVA'],
+        cooling: ['badge-yellow', 'ESFRIANDO'],
+        dead: ['badge-red', 'MORTA'],
+        converted: ['badge-blue', 'VENDIDA'],
+    };
+    const [cls, label] = map[status] || ['badge-gray', status || '?'];
+    return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+
+</body>
+</html>
