@@ -543,9 +543,8 @@ function formatTime(dateStr) {
 }
 
 function normalizeTimestamp(dateStr) {
-  return dateStr.includes("+") || dateStr.includes("Z")
-    ? dateStr
-    : dateStr.replace(" ", "T") + "Z";
+  if (/[+-]\d{2}:\d{2}$/.test(dateStr) || dateStr.endsWith("Z")) return dateStr;
+  return dateStr.replace(" ", "T") + "Z";
 }
 
 function formatTimeShort(dateStr) {
