@@ -43,7 +43,11 @@ async def list_conversations():
                 (SELECT m5.sent_by FROM messages m5
                  WHERE m5.conversation_id = c.id AND m5.direction = 'outbound' AND m5.sent_by IS NOT NULL
                  ORDER BY m5.created_at DESC LIMIT 1
-                ) as last_responder
+                ) as last_responder,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM scheduled_sends ss
+                    WHERE ss.conversation_id = c.id AND ss.status = 'pending'
+                ) THEN 1 ELSE 0 END as has_scheduled
             FROM conversations c
             LEFT JOIN messages m ON m.id = (
                 SELECT m4.id FROM messages m4

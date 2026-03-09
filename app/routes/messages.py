@@ -15,6 +15,7 @@ from app.database import get_db
 from app.models import RegenerateRequest, RewriteRequest
 from app.services.evolution import send_document_message, send_media_message, send_text_message
 from app.services.draft_engine import regenerate_draft
+from app.services.send_executor import execute_send
 from app.services.strategic_annotation import generate_annotation
 from app.services.text_rewrite import rewrite_text
 from app.websocket_manager import manager
@@ -37,21 +38,23 @@ async def send_message(
     file: UploadFile | None = File(None),
 ):
     operator = get_operator_from_request(request)
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT phone_number FROM conversations WHERE id = ?",
-            (conversation_id,),
-        )
-        conv = await row.fetchone()
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
 
-        media_url = None
-        media_type = None
-
+    # If file is attached, handle media send path (not shared with scheduled sends)
+    if file and file.filename:
+        db = await get_db()
         try:
-            if file and file.filename:
+            row = await db.execute(
+                "SELECT phone_number FROM conversations WHERE id = ?",
+                (conversation_id,),
+            )
+            conv = await row.fetchone()
+            if not conv:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+            media_url = None
+            media_type = None
+
+            try:
                 file_content = await file.read()
                 b64_data = base64.b64encode(file_content).decode()
                 content_type = file.content_type or "application/octet-stream"
@@ -62,20 +65,17 @@ async def send_message(
                 else:
                     await send_document_message(conv["phone_number"], b64_data, file.filename, text)
                     media_type = "document"
-            else:
-                await send_text_message(conv["phone_number"], text)
-        except Exception as e:
-            logger.exception("Failed to send message via Evolution API")
-            raise HTTPException(status_code=502, detail=f"Evolution API error: {e}")
+            except Exception as e:
+                logger.exception("Failed to send message via Evolution API")
+                raise HTTPException(status_code=502, detail=f"Evolution API error: {e}")
 
-        cursor = await db.execute(
-            "INSERT INTO messages (conversation_id, direction, content, media_url, media_type, sent_by) VALUES (?, 'outbound', ?, ?, ?, ?)",
-            (conversation_id, text, media_url, media_type, operator),
-        )
-        msg_id = cursor.lastrowid
+            cursor = await db.execute(
+                "INSERT INTO messages (conversation_id, direction, content, media_url, media_type, sent_by) VALUES (?, 'outbound', ?, ?, ?, ?)",
+                (conversation_id, text, media_url, media_type, operator),
+            )
+            msg_id = cursor.lastrowid
 
-        # Save attachment file to disk
-        if file and file.filename and media_type:
+            # Save attachment file to disk
             attachments_dir = Path(settings.database_path).parent / "attachments"
             os.makedirs(attachments_dir, exist_ok=True)
             file_path = attachments_dir / f"{msg_id}_{file.filename}"
@@ -88,104 +88,119 @@ async def send_message(
                 (media_url, msg_id),
             )
 
-        await db.execute(
-            "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (conversation_id,),
-        )
-
-        # Record edit pair if draft was used
-        edit_pair_id = None
-        if draft_id:
-            draft_row = await db.execute(
-                "SELECT draft_text, trigger_message_id, draft_group_id, prompt_hash, operator_instruction, situation_summary FROM drafts WHERE id = ? AND conversation_id = ?",
-                (draft_id, conversation_id),
+            await db.execute(
+                "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (conversation_id,),
             )
-            draft = await draft_row.fetchone()
-            if draft:
-                trigger_row = await db.execute(
-                    "SELECT content FROM messages WHERE id = ?",
-                    (draft["trigger_message_id"],),
+
+            # Record edit pair if draft was used (file path)
+            edit_pair_id = None
+            attachment_filename = file.filename if media_type else None
+            if draft_id:
+                draft_row = await db.execute(
+                    "SELECT draft_text, trigger_message_id, draft_group_id, prompt_hash, operator_instruction, situation_summary FROM drafts WHERE id = ? AND conversation_id = ?",
+                    (draft_id, conversation_id),
                 )
-                trigger_msg = await trigger_row.fetchone()
-                customer_message = trigger_msg["content"] if trigger_msg else ""
-
-                was_edited = draft["draft_text"] != text
-
-                # Get all drafts in the group
-                all_drafts_json = None
-                group_id = draft_group_id or draft["draft_group_id"]
-                if group_id:
-                    group_row = await db.execute(
-                        "SELECT draft_text, approach FROM drafts WHERE draft_group_id = ? ORDER BY variation_index",
-                        (group_id,),
+                draft = await draft_row.fetchone()
+                if draft:
+                    trigger_row = await db.execute(
+                        "SELECT content FROM messages WHERE id = ?",
+                        (draft["trigger_message_id"],),
                     )
-                    group_drafts = await group_row.fetchall()
-                    all_drafts_json = json.dumps([
-                        {"text": d["draft_text"], "approach": d["approach"]}
-                        for d in group_drafts
-                    ], ensure_ascii=False)
+                    trigger_msg = await trigger_row.fetchone()
+                    customer_message = trigger_msg["content"] if trigger_msg else ""
 
-                # Extract attachment filename if operator sent a file
-                attachment_filename = file.filename if (file and file.filename and media_type) else None
+                    was_edited = draft["draft_text"] != text
 
-                cursor = await db.execute(
-                    """INSERT INTO edit_pairs
-                       (conversation_id, customer_message, original_draft, final_message, was_edited,
-                        operator_instruction, all_drafts_json, selected_draft_index, prompt_hash,
-                        regeneration_count, situation_summary, attachment_filename)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (conversation_id, customer_message, draft["draft_text"], text, was_edited,
-                     operator_instruction or draft["operator_instruction"],
-                     all_drafts_json, selected_draft_index, draft["prompt_hash"], regeneration_count,
-                     draft["situation_summary"], attachment_filename),
-                )
-                edit_pair_id = cursor.lastrowid
+                    all_drafts_json = None
+                    group_id = draft_group_id or draft["draft_group_id"]
+                    if group_id:
+                        group_row = await db.execute(
+                            "SELECT draft_text, approach FROM drafts WHERE draft_group_id = ? ORDER BY variation_index",
+                            (group_id,),
+                        )
+                        group_drafts = await group_row.fetchall()
+                        all_drafts_json = json.dumps([
+                            {"text": d["draft_text"], "approach": d["approach"]}
+                            for d in group_drafts
+                        ], ensure_ascii=False)
 
-                # Mark all drafts in group as sent/discarded
-                if group_id:
+                    cursor = await db.execute(
+                        """INSERT INTO edit_pairs
+                           (conversation_id, customer_message, original_draft, final_message, was_edited,
+                            operator_instruction, all_drafts_json, selected_draft_index, prompt_hash,
+                            regeneration_count, situation_summary, attachment_filename)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (conversation_id, customer_message, draft["draft_text"], text, was_edited,
+                         operator_instruction or draft["operator_instruction"],
+                         all_drafts_json, selected_draft_index, draft["prompt_hash"], regeneration_count,
+                         draft["situation_summary"], attachment_filename),
+                    )
+                    edit_pair_id = cursor.lastrowid
+
+                    if group_id:
+                        await db.execute(
+                            "UPDATE drafts SET status = 'discarded' WHERE draft_group_id = ?",
+                            (group_id,),
+                        )
                     await db.execute(
-                        "UPDATE drafts SET status = 'discarded' WHERE draft_group_id = ?",
-                        (group_id,),
+                        "UPDATE drafts SET status = 'sent' WHERE id = ?",
+                        (draft_id,),
                     )
-                await db.execute(
-                    "UPDATE drafts SET status = 'sent' WHERE id = ?",
-                    (draft_id,),
+
+            await db.commit()
+
+            # Fire-and-forget strategic annotation
+            if edit_pair_id and draft:
+                asyncio.create_task(
+                    generate_annotation(
+                        edit_pair_id=edit_pair_id,
+                        customer_message=customer_message,
+                        original_draft=draft["draft_text"],
+                        final_message=text,
+                        was_edited=was_edited,
+                        situation_summary=draft["situation_summary"],
+                        attachment_filename=attachment_filename,
+                    )
                 )
 
-        await db.commit()
-
-        # Fire-and-forget strategic annotation in background
-        if edit_pair_id and draft:
-            asyncio.create_task(
-                generate_annotation(
-                    edit_pair_id=edit_pair_id,
-                    customer_message=customer_message,
-                    original_draft=draft["draft_text"],
-                    final_message=text,
-                    was_edited=was_edited,
-                    situation_summary=draft["situation_summary"],
-                    attachment_filename=attachment_filename,
-                )
+            await manager.broadcast(
+                conversation_id,
+                {
+                    "type": "message_sent",
+                    "conversation_id": conversation_id,
+                    "message": {
+                        "id": msg_id,
+                        "conversation_id": conversation_id,
+                        "direction": "outbound",
+                        "content": text,
+                        "media_type": media_type,
+                    },
+                },
             )
 
-        await manager.broadcast(
-            conversation_id,
-            {
-                "type": "message_sent",
-                "conversation_id": conversation_id,
-                "message": {
-                    "id": msg_id,
-                    "conversation_id": conversation_id,
-                    "direction": "outbound",
-                    "content": text,
-                    "media_type": media_type,
-                },
-            },
-        )
+            return {"status": "ok", "message_id": msg_id}
+        finally:
+            await db.close()
 
-        return {"status": "ok", "message_id": msg_id}
-    finally:
-        await db.close()
+    # Text-only send: use shared execute_send()
+    try:
+        result = await execute_send(
+            conversation_id=conversation_id,
+            text=text,
+            operator=operator,
+            draft_id=draft_id,
+            draft_group_id=draft_group_id,
+            selected_draft_index=selected_draft_index,
+            operator_instruction=operator_instruction,
+            regeneration_count=regeneration_count,
+        )
+        return {"status": "ok", "message_id": result["message_id"]}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to send message via Evolution API")
+        raise HTTPException(status_code=502, detail=f"Evolution API error: {e}")
 
 
 @router.post("/conversations/{conversation_id}/regenerate")

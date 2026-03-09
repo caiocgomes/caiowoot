@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,7 +9,8 @@ from starlette.requests import Request
 
 from app.auth import AuthMiddleware, validate_session_cookie, COOKIE_NAME
 from app.database import init_db
-from app.routes import admin, attachments, conversations, knowledge, login, messages, review, rules, settings, webhook
+from app.routes import admin, attachments, conversations, knowledge, login, messages, review, rules, scheduled, settings, webhook
+from app.services.scheduler import scheduler_loop
 from app.websocket_manager import manager
 
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +19,13 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    task = asyncio.create_task(scheduler_loop())
     yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="CaioWoot", lifespan=lifespan)
@@ -43,6 +51,7 @@ app.include_router(rules.router)
 app.include_router(review.router)
 app.include_router(settings.router)
 app.include_router(attachments.router)
+app.include_router(scheduled.router)
 app.include_router(admin.router)
 
 

@@ -88,7 +88,31 @@ async def receive_webhook(request: Request):
         )
         msg_id = cursor.lastrowid
 
+        # Auto-cancel pending scheduled sends for this conversation
+        cancelled_rows = await db.execute(
+            """UPDATE scheduled_sends
+               SET status = 'cancelled', cancelled_reason = 'client_replied', cancelled_by_message_id = ?
+               WHERE conversation_id = ? AND status = 'pending'
+               RETURNING id""",
+            (msg_id, conversation_id),
+        )
+        cancelled_sends = await cancelled_rows.fetchall()
+
         await db.commit()
+
+        # Broadcast cancellation events for each cancelled scheduled send
+        if cancelled_sends:
+            from app.websocket_manager import manager as ws_manager
+            for cancelled in cancelled_sends:
+                await ws_manager.broadcast(
+                    conversation_id,
+                    {
+                        "type": "scheduled_send_cancelled",
+                        "conversation_id": conversation_id,
+                        "scheduled_send_id": cancelled["id"],
+                        "reason": "client_replied",
+                    },
+                )
 
         # Trigger draft generation asynchronously
         from app.services.draft_engine import generate_drafts

@@ -60,6 +60,9 @@ async def db():
          patch("app.services.prompt_config.get_db", mock_get_db), \
          patch("app.services.operator_profile.get_db", mock_get_db), \
          patch("app.services.strategic_annotation.get_db", mock_get_db), \
+         patch("app.services.send_executor.get_db", mock_get_db), \
+         patch("app.routes.scheduled.get_db", mock_get_db), \
+         patch("app.services.scheduler.get_db", mock_get_db), \
          patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}) as mock_summary, \
          patch("app.routes.conversations.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}), \
          patch("app.services.draft_engine.retrieve_similar", return_value=[]) as mock_retrieval, \

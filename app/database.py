@@ -88,6 +88,22 @@ CREATE TABLE IF NOT EXISTS operator_profiles (
     context TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS scheduled_sends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+    content TEXT NOT NULL,
+    send_at TIMESTAMP NOT NULL,
+    status TEXT DEFAULT 'pending',
+    cancelled_reason TEXT,
+    cancelled_by_message_id INTEGER,
+    draft_id INTEGER,
+    draft_group_id TEXT,
+    selected_draft_index INTEGER,
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP
+);
 """
 
 MIGRATIONS = [
@@ -178,6 +194,25 @@ MIGRATIONS = [
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """),
+    ("scheduled_sends_table", """
+        CREATE TABLE IF NOT EXISTS scheduled_sends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            content TEXT NOT NULL,
+            send_at TIMESTAMP NOT NULL,
+            status TEXT DEFAULT 'pending',
+            cancelled_reason TEXT,
+            cancelled_by_message_id INTEGER,
+            draft_id INTEGER,
+            draft_group_id TEXT,
+            selected_draft_index INTEGER,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_at TIMESTAMP
+        )
+    """),
+    ("scheduled_sends_status_send_at_index",
+     "CREATE INDEX IF NOT EXISTS idx_scheduled_sends_status_send_at ON scheduled_sends (status, send_at)"),
 ]
 
 _chroma_client = None
