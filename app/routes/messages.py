@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models import RegenerateRequest, RewriteRequest
 from app.services.evolution import send_document_message, send_media_message, send_text_message
 from app.services.draft_engine import regenerate_draft
-from app.services.send_executor import execute_send
+from app.services.send_executor import execute_send, check_duplicate_send, DuplicateSendError
 from app.services.strategic_annotation import generate_annotation
 from app.services.text_rewrite import rewrite_text
 from app.websocket_manager import manager
@@ -50,6 +50,10 @@ async def send_message(
             conv = await row.fetchone()
             if not conv:
                 raise HTTPException(status_code=404, detail="Conversation not found")
+
+            # Dedup guard for file sends
+            if await check_duplicate_send(db, conversation_id, text):
+                raise HTTPException(status_code=409, detail="Mensagem idêntica enviada há menos de 5 segundos")
 
             media_url = None
             media_type = None
@@ -196,6 +200,8 @@ async def send_message(
             regeneration_count=regeneration_count,
         )
         return {"status": "ok", "message_id": result["message_id"]}
+    except DuplicateSendError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

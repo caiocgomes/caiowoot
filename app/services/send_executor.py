@@ -2,12 +2,35 @@ import asyncio
 import json
 import logging
 
+from datetime import datetime, timedelta
+
 from app.database import get_db
 from app.services.evolution import send_text_message
 from app.services.strategic_annotation import generate_annotation
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
+
+DEDUP_WINDOW_SECONDS = 5
+
+
+class DuplicateSendError(Exception):
+    pass
+
+
+async def check_duplicate_send(db, conversation_id: int, content: str) -> bool:
+    """Check if an identical outbound message was sent to this conversation within the dedup window."""
+    row = await db.execute(
+        "SELECT content, created_at FROM messages WHERE conversation_id = ? AND direction = 'outbound' ORDER BY created_at DESC LIMIT 1",
+        (conversation_id,),
+    )
+    last_msg = await row.fetchone()
+    if not last_msg:
+        return False
+    if last_msg["content"] != content:
+        return False
+    created_at = datetime.fromisoformat(last_msg["created_at"])
+    return datetime.utcnow() - created_at < timedelta(seconds=DEDUP_WINDOW_SECONDS)
 
 
 async def execute_send(
@@ -35,6 +58,10 @@ async def execute_send(
         conv = await row.fetchone()
         if not conv:
             raise ValueError(f"Conversation {conversation_id} not found")
+
+        # Dedup guard: reject identical message to same conversation within 5s
+        if await check_duplicate_send(db, conversation_id, text):
+            raise DuplicateSendError("Mensagem idêntica enviada há menos de 5 segundos")
 
         # Send via Evolution API (text only for scheduled sends)
         await send_text_message(conv["phone_number"], text)
