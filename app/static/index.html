@@ -96,7 +96,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
 /* Draft area */
 #draft-area { display: flex; gap: 8px; align-items: flex-end; }
-#draft-input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 200px; max-height: 500px; }
+#draft-input-wrapper { flex: 1; position: relative; }
+#draft-input { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 200px; max-height: 500px; }
+#clear-draft-btn { display: none; position: absolute; top: 6px; right: 6px; min-width: 44px; min-height: 44px; width: 32px; height: 32px; padding: 0; background: #e0e0e0; border: none; border-radius: 50%; font-size: 18px; line-height: 1; color: #555; cursor: pointer; z-index: 2; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+#clear-draft-btn:hover { background: #ccc; color: #333; }
 
 /* Attachment */
 #attachment-bar { display: none; margin-bottom: 8px; padding: 6px 10px; background: #f0f0f0; border-radius: 6px; font-size: 13px; }
@@ -253,6 +256,32 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 #promote-rule-input { width: 100%; min-height: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; margin-bottom: 12px; }
 #promote-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* Schedule button and dropdown */
+#schedule-wrapper { position: relative; }
+#schedule-btn { padding: 10px 12px; background: #fff; border: 1px solid #25D366; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: #25D366; white-space: nowrap; }
+#schedule-btn:hover { background: #f0faf0; }
+#schedule-dropdown { display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 50; min-width: 200px; overflow: hidden; }
+#schedule-dropdown.open { display: block; }
+.schedule-option { padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.schedule-option:last-child { border-bottom: none; }
+.schedule-option:hover { background: #f0faf0; }
+#schedule-custom-row { display: none; padding: 10px 14px; border-top: 1px solid #eee; }
+#schedule-custom-row input { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; font-family: inherit; }
+#schedule-custom-row button { margin-top: 6px; padding: 6px 12px; background: #25D366; color: #fff; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; width: 100%; }
+
+/* Scheduled send pills */
+.scheduled-pill { background: #fffde7; border: 1px solid #fff9c4; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.scheduled-pill-icon { font-size: 16px; flex-shrink: 0; }
+.scheduled-pill-info { flex: 1; min-width: 0; }
+.scheduled-pill-time { font-weight: 600; color: #f57f17; font-size: 12px; }
+.scheduled-pill-preview { color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.scheduled-pill-cancel { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: #c00; flex-shrink: 0; }
+.scheduled-pill-cancel:hover { background: #fee; }
+#scheduled-pills { margin-bottom: 0; }
+
+/* Clock icon for conversation list */
+.conv-clock { font-size: 12px; margin-left: 4px; vertical-align: middle; }
+
 /* Hamburger button - hidden on desktop */
 #hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; margin-right: 8px; }
 
@@ -300,6 +329,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
   /* Textarea full width */
   #draft-input { min-height: 100px; width: 100%; }
+  #clear-draft-btn { min-width: 44px; min-height: 44px; width: 44px; height: 44px; font-size: 20px; top: 4px; right: 4px; }
   #draft-area { flex-direction: column; gap: 6px; }
   #btn-group { flex-direction: row; justify-content: flex-end; width: 100%; gap: 8px; }
   #send-btn, #rewrite-btn, #attach-btn { min-height: 44px; }
@@ -416,6 +446,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
       <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()">&#x2190;</button> <span id="chat-header-name"></span></div>
       <div id="messages"></div>
       <div id="compose">
+        <div id="scheduled-pills"></div>
         <div id="draft-cards-container">
           <div class="draft-cards-row">
             <div id="draft-cards"></div>
@@ -434,9 +465,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
           <button id="attachment-remove">&times;</button>
         </div>
         <div id="draft-area">
-          <textarea id="draft-input" placeholder="Digite sua mensagem..."></textarea>
+          <div id="draft-input-wrapper">
+            <textarea id="draft-input" placeholder="Digite sua mensagem..."></textarea>
+            <button id="clear-draft-btn" type="button" title="Limpar texto">&times;</button>
+          </div>
           <div id="btn-group">
             <button id="send-btn">Enviar</button>
+            <div id="schedule-wrapper">
+              <button id="schedule-btn">Agendar</button>
+              <div id="schedule-dropdown">
+                <div class="schedule-option" data-minutes="30">Em 30 minutos</div>
+                <div class="schedule-option" data-minutes="60">Em 1 hora</div>
+                <div class="schedule-option" data-minutes="120">Em 2 horas</div>
+                <div class="schedule-option" data-preset="tomorrow-9">Amanha 9h</div>
+                <div class="schedule-option" data-preset="tomorrow-14">Amanha 14h</div>
+                <div class="schedule-option" data-custom="true">Personalizado...</div>
+                <div id="schedule-custom-row">
+                  <input type="datetime-local" id="schedule-custom-datetime">
+                  <button id="schedule-custom-confirm">Agendar</button>
+                </div>
+              </div>
+            </div>
             <button id="rewrite-btn" title="Reescrever texto" disabled>Reescrever</button>
             <button id="attach-btn" title="Anexar arquivo">&#x1F4CE;</button>
             <input type="file" id="attach-file">

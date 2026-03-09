@@ -89,6 +89,21 @@ function handleWSEvent(data) {
       appendMessage(data.message);
     }
     loadConversations();
+  } else if (data.type === "scheduled_send_created") {
+    if (data.conversation_id === currentConversationId) {
+      addScheduledPill(data.scheduled_send);
+    }
+    loadConversations();
+  } else if (data.type === "scheduled_send_cancelled") {
+    if (data.conversation_id === currentConversationId) {
+      removeScheduledPill(data.scheduled_send_id);
+    }
+    loadConversations();
+  } else if (data.type === "scheduled_send_completed") {
+    if (data.conversation_id === currentConversationId) {
+      removeScheduledPill(data.scheduled_send_id);
+    }
+    loadConversations();
   }
 }
 
@@ -123,10 +138,11 @@ function renderConversationList(conversations) {
       : "";
 
     const dot = conv.is_new ? '<span class="conv-new-dot"></span>' : "";
+    const clock = conv.has_scheduled ? '<span class="conv-clock" title="Envio agendado">&#x1F551;</span>' : "";
 
     div.innerHTML = `
       <span class="conv-time">${time}</span>
-      <div class="conv-name">${dot}${escapeHtml(name)}</div>
+      <div class="conv-name">${dot}${escapeHtml(name)}${clock}</div>
       <div class="conv-preview">${escapeHtml(preview)}</div>
       ${responder}
     `;
@@ -171,6 +187,7 @@ async function openConversation(id) {
 
   // Reset compose
   document.getElementById("draft-input").value = "";
+  document.getElementById("clear-draft-btn").style.display = "none";
   document.getElementById("justification").style.display = "none";
   document.getElementById("justification").textContent = "";
   document.getElementById("draft-cards-container").style.display = "none";
@@ -179,6 +196,9 @@ async function openConversation(id) {
   if (data.pending_drafts && data.pending_drafts.length > 0) {
     showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
   }
+
+  // Load scheduled sends
+  loadScheduledSends(id);
 
   // Render context panel
   renderContextPanel(conv, data.situation_summary);
@@ -317,6 +337,7 @@ function selectDraft(index) {
   currentDraftId = draft.id;
 
   document.getElementById("draft-input").value = draft.draft_text;
+  document.getElementById("clear-draft-btn").style.display = draft.draft_text.trim() ? "flex" : "none";
 
   // Update justification
   if (draft.justification) {
@@ -470,6 +491,7 @@ async function sendMessage() {
     selectedDraftIndex = null;
     regenerationCount = 0;
     removeAttachment();
+    document.getElementById("clear-draft-btn").style.display = "none";
     document.getElementById("justification").style.display = "none";
     document.getElementById("draft-cards-container").style.display = "none";
     document.getElementById("instruction-input").value = "";
@@ -1274,6 +1296,181 @@ async function updateFunnelStage(stage) {
   });
 }
 
+// --- Scheduled Sends ---
+let scheduledSends = [];
+
+async function loadScheduledSends(convId) {
+  const container = document.getElementById("scheduled-pills");
+  container.innerHTML = "";
+  scheduledSends = [];
+  try {
+    const res = await fetch(`/conversations/${convId}/scheduled`);
+    if (!res.ok) return;
+    scheduledSends = await res.json();
+    for (const s of scheduledSends) {
+      addScheduledPill(s);
+    }
+  } catch (e) {
+    console.error("Failed to load scheduled sends:", e);
+  }
+}
+
+function addScheduledPill(send) {
+  const container = document.getElementById("scheduled-pills");
+  // Remove existing pill for this id if any
+  const existing = container.querySelector(`[data-scheduled-id="${send.id}"]`);
+  if (existing) existing.remove();
+
+  const pill = document.createElement("div");
+  pill.className = "scheduled-pill";
+  pill.dataset.scheduledId = send.id;
+
+  const sendAt = new Date(normalizeTimestamp(send.send_at));
+  const timeStr = sendAt.toLocaleString("pt-BR", {
+    day: "2-digit", month: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+  const preview = (send.content || "").substring(0, 60);
+
+  pill.innerHTML = `
+    <span class="scheduled-pill-icon">&#x1F551;</span>
+    <div class="scheduled-pill-info">
+      <div class="scheduled-pill-time">Agendado para ${timeStr}</div>
+      <div class="scheduled-pill-preview">${escapeHtml(preview)}</div>
+    </div>
+    <button class="scheduled-pill-cancel" onclick="cancelScheduledSend(${send.id})">Cancelar</button>
+  `;
+  container.appendChild(pill);
+}
+
+function removeScheduledPill(sendId) {
+  const container = document.getElementById("scheduled-pills");
+  const pill = container.querySelector(`[data-scheduled-id="${sendId}"]`);
+  if (pill) pill.remove();
+  scheduledSends = scheduledSends.filter(s => s.id !== sendId);
+}
+
+async function cancelScheduledSend(sendId) {
+  try {
+    const res = await fetch(`/scheduled-sends/${sendId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(`Erro ao cancelar: ${err.detail || "erro desconhecido"}`);
+    }
+  } catch (e) {
+    alert("Erro ao cancelar agendamento");
+  }
+}
+
+function computeSendAt(option) {
+  const now = new Date();
+  if (option.minutes) {
+    return new Date(now.getTime() + option.minutes * 60 * 1000).toISOString();
+  }
+  if (option.preset === "tomorrow-9") {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  }
+  if (option.preset === "tomorrow-14") {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(14, 0, 0, 0);
+    return d.toISOString();
+  }
+  return option.custom;
+}
+
+async function scheduleMessage(sendAt) {
+  const input = document.getElementById("draft-input");
+  const text = input.value.trim();
+  if (!text || !currentConversationId) return;
+
+  const body = {
+    content: text,
+    send_at: sendAt,
+  };
+  if (currentDraftId) body.draft_id = currentDraftId;
+  if (currentDraftGroupId) body.draft_group_id = currentDraftGroupId;
+  if (selectedDraftIndex !== null) body.selected_draft_index = selectedDraftIndex;
+
+  try {
+    const res = await fetch(`/conversations/${currentConversationId}/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(`Erro ao agendar: ${err.detail || "erro desconhecido"}`);
+      return;
+    }
+
+    // Reset UI like after send
+    input.value = "";
+    currentDraftId = null;
+    currentDraftGroupId = null;
+    currentDrafts = [];
+    selectedDraftIndex = null;
+    regenerationCount = 0;
+    removeAttachment();
+    document.getElementById("justification").style.display = "none";
+    document.getElementById("draft-cards-container").style.display = "none";
+    document.getElementById("instruction-input").value = "";
+    closeScheduleDropdown();
+  } catch (e) {
+    alert("Erro ao agendar: falha na conexao");
+  }
+}
+
+function toggleScheduleDropdown() {
+  const dropdown = document.getElementById("schedule-dropdown");
+  dropdown.classList.toggle("open");
+  document.getElementById("schedule-custom-row").style.display = "none";
+}
+
+function closeScheduleDropdown() {
+  document.getElementById("schedule-dropdown").classList.remove("open");
+  document.getElementById("schedule-custom-row").style.display = "none";
+}
+
+function initScheduleUI() {
+  document.getElementById("schedule-btn").onclick = toggleScheduleDropdown;
+
+  document.querySelectorAll(".schedule-option").forEach(opt => {
+    opt.onclick = () => {
+      if (opt.dataset.minutes) {
+        const sendAt = computeSendAt({ minutes: parseInt(opt.dataset.minutes) });
+        scheduleMessage(sendAt);
+      } else if (opt.dataset.preset) {
+        const sendAt = computeSendAt({ preset: opt.dataset.preset });
+        scheduleMessage(sendAt);
+      } else if (opt.dataset.custom) {
+        const customRow = document.getElementById("schedule-custom-row");
+        customRow.style.display = customRow.style.display === "none" ? "block" : "none";
+      }
+    };
+  });
+
+  document.getElementById("schedule-custom-confirm").onclick = () => {
+    const dt = document.getElementById("schedule-custom-datetime").value;
+    if (!dt) { alert("Selecione data e hora"); return; }
+    const sendAt = new Date(dt).toISOString();
+    scheduleMessage(sendAt);
+  };
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    const wrapper = document.getElementById("schedule-wrapper");
+    if (!wrapper.contains(e.target)) {
+      closeScheduleDropdown();
+    }
+  });
+}
+
 // --- Init ---
 document.getElementById("send-btn").onclick = sendMessage;
 document.getElementById("draft-input").onkeydown = (e) => {
@@ -1285,6 +1482,7 @@ document.getElementById("draft-input").onkeydown = (e) => {
 document.getElementById("draft-input").oninput = function () {
   autoResize(this);
   document.getElementById("rewrite-btn").disabled = !this.value.trim();
+  document.getElementById("clear-draft-btn").style.display = this.value.trim() ? "flex" : "none";
 };
 document.getElementById("regen-all-btn").onclick = regenerateAll;
 document.getElementById("regen-instruction-btn").onclick = regenerateAll;
@@ -1295,9 +1493,23 @@ document.getElementById("instruction-input").onkeydown = (e) => {
   }
 };
 document.getElementById("rewrite-btn").onclick = rewriteText;
+document.getElementById("clear-draft-btn").onclick = function () {
+  document.getElementById("draft-input").value = "";
+  currentDraftId = null;
+  currentDraftGroupId = null;
+  selectedDraftIndex = null;
+  currentDrafts = [];
+  document.getElementById("justification").style.display = "none";
+  document.getElementById("justification").textContent = "";
+  document.getElementById("clear-draft-btn").style.display = "none";
+  document.getElementById("rewrite-btn").disabled = true;
+  // Deselect draft cards
+  document.querySelectorAll(".draft-card").forEach(c => c.classList.remove("selected"));
+};
 document.getElementById("attach-btn").onclick = () => document.getElementById("attach-file").click();
 document.getElementById("attach-file").onchange = handleFileSelect;
 document.getElementById("attachment-remove").onclick = removeAttachment;
 
+initScheduleUI();
 loadConversations();
 connectWS();
