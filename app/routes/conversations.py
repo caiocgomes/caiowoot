@@ -217,6 +217,8 @@ async def classify_conversation(conversation_id: int):
             "product": result.get("product"),
             "stage": result.get("stage"),
         }
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to classify conversation %d", conversation_id)
         raise HTTPException(status_code=500, detail="Classification failed")

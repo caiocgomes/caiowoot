@@ -194,3 +194,69 @@ async def test_unanswered_conversations_detected(db):
     data = json.loads(unanswered["salvageable_sales_json"])
     assert len(data) == 1
     assert data[0]["contact_name"] == "Ignorado"
+
+
+# ── JSON parse fallback tests ───────────────────────────────────────
+
+
+def _make_llm_response(text):
+    """Build a mock Anthropic response with given text content."""
+    return MagicMock(content=[MagicMock(text=text)])
+
+
+def _sample_assessments():
+    return [_make_analysis_result(1, "Miguel"), _make_analysis_result(2, "Miguel")]
+
+
+@pytest.mark.asyncio
+async def test_generate_digest_valid_json():
+    """_generate_operator_digest parses valid JSON response correctly."""
+    valid_json = json.dumps({
+        "summary": "Operador no piloto.",
+        "patterns": [{"pattern": "Aceita tudo", "examples": [], "suggestion": "Editar"}],
+        "factual_issues_highlight": [],
+        "salvageable_sales": [],
+    })
+
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_llm_response(valid_json))
+
+    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+        from app.services.operator_coaching import _generate_operator_digest
+        result = await _generate_operator_digest("Miguel", _sample_assessments())
+
+    assert result["summary"] == "Operador no piloto."
+    assert len(result["patterns"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_digest_json_embedded_in_markdown():
+    """_generate_operator_digest extracts JSON embedded in markdown text."""
+    messy_response = 'Aqui está a análise:\n\n```json\n{"summary": "Piloto automático total.", "patterns": [], "factual_issues_highlight": [], "salvageable_sales": []}\n```'
+
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_llm_response(messy_response))
+
+    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+        from app.services.operator_coaching import _generate_operator_digest
+        result = await _generate_operator_digest("Miguel", _sample_assessments())
+
+    assert result["summary"] == "Piloto automático total."
+
+
+@pytest.mark.asyncio
+async def test_generate_digest_invalid_json_fallback():
+    """_generate_operator_digest falls back to raw text when no JSON found."""
+    no_json = "Este operador precisa melhorar urgentemente."
+
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_llm_response(no_json))
+
+    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+        from app.services.operator_coaching import _generate_operator_digest
+        result = await _generate_operator_digest("Miguel", _sample_assessments())
+
+    assert result["summary"] == no_json
+    assert result["patterns"] == []
+    assert result["factual_issues_highlight"] == []
+    assert result["salvageable_sales"] == []
