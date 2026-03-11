@@ -18,7 +18,8 @@ async def _process_due_sends():
         await db.execute(
             """UPDATE scheduled_sends
                SET status = 'sending'
-               WHERE status = 'pending' AND send_at <= datetime('now')"""
+               WHERE status = 'pending'
+                 AND replace(send_at, 'T', ' ') <= datetime('now')"""
         )
         await db.commit()
 
