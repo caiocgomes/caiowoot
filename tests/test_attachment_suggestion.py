@@ -394,3 +394,114 @@ async def test_annotation_no_attachment_when_none():
         call_kwargs = mock_client.messages.create.call_args.kwargs
         user_content = call_kwargs["messages"][0]["content"]
         assert "Operador anexou:" not in user_content
+
+
+# --- 8.6 suggested_attachment persistence tests ---
+
+
+@pytest.mark.asyncio
+async def test_suggested_attachment_persisted_in_drafts(db):
+    """generate_drafts persists suggested_attachment to the drafts table."""
+    from app.services.draft_engine import generate_drafts
+
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name) VALUES ('5511999999999', 'Maria')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Me manda o handbook')"
+    )
+    await db.commit()
+
+    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_api:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=[
+            make_draft_tool_response("Segue o handbook!", "Cliente pediu.", "handbook-cdo.pdf"),
+            make_draft_tool_response("Claro, vou enviar!", "Pedido direto.", None),
+            make_draft_tool_response("Opa, mando já!", "Casual.", "handbook-cdo.pdf"),
+        ])
+        mock_api.return_value = mock_client
+
+        with patch("app.services.draft_engine._validate_suggested_attachment", side_effect=lambda x: x):
+            await generate_drafts(1, 1)
+
+    rows = await db.execute(
+        "SELECT variation_index, suggested_attachment FROM drafts WHERE conversation_id = 1 ORDER BY variation_index"
+    )
+    drafts = await rows.fetchall()
+    assert len(drafts) == 3
+    assert drafts[0]["suggested_attachment"] == "handbook-cdo.pdf"
+    assert drafts[1]["suggested_attachment"] is None
+    assert drafts[2]["suggested_attachment"] == "handbook-cdo.pdf"
+
+
+@pytest.mark.asyncio
+async def test_suggested_attachment_returned_in_pending_drafts(db, client):
+    """GET /conversations/:id returns suggested_attachment in pending_drafts."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Oi')"
+    )
+    await db.execute(
+        """INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, justification,
+           draft_group_id, variation_index, approach, status, suggested_attachment)
+           VALUES (1, 1, 'Segue!', 'Pediu handbook', 'group-1', 0, 'direta', 'pending', 'handbook-cdo.pdf')"""
+    )
+    await db.execute(
+        """INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, justification,
+           draft_group_id, variation_index, approach, status, suggested_attachment)
+           VALUES (1, 1, 'Claro!', 'Consultiva', 'group-1', 1, 'consultiva', 'pending', NULL)"""
+    )
+    await db.commit()
+
+    res = await client.get("/conversations/1")
+    assert res.status_code == 200
+    data = res.json()
+    pending = data["pending_drafts"]
+    assert len(pending) == 2
+    assert pending[0]["suggested_attachment"] == "handbook-cdo.pdf"
+    assert pending[1]["suggested_attachment"] is None
+
+
+@pytest.mark.asyncio
+async def test_regenerate_draft_persists_suggested_attachment(db):
+    """regenerate_draft persists suggested_attachment when regenerating all drafts."""
+    from app.services.draft_engine import regenerate_draft
+
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name) VALUES ('5511999999999', 'Maria')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Me manda o handbook')"
+    )
+    # Create initial drafts so regenerate has a group to replace
+    for i, approach in enumerate(["direta", "consultiva", "casual"]):
+        await db.execute(
+            """INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, justification,
+               draft_group_id, variation_index, approach, status)
+               VALUES (1, 1, 'old draft', 'old', 'group-1', ?, ?, 'pending')""",
+            (i, approach),
+        )
+    await db.commit()
+
+    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_api:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=[
+            make_draft_tool_response("Novo draft 1", "Razão 1", "handbook-cdo.pdf"),
+            make_draft_tool_response("Novo draft 2", "Razão 2", None),
+            make_draft_tool_response("Novo draft 3", "Razão 3", "handbook-zero.pdf"),
+        ])
+        mock_api.return_value = mock_client
+
+        with patch("app.services.draft_engine._validate_suggested_attachment", side_effect=lambda x: x):
+            await regenerate_draft(1, 1)
+
+    rows = await db.execute(
+        "SELECT variation_index, suggested_attachment FROM drafts WHERE conversation_id = 1 ORDER BY variation_index"
+    )
+    drafts = await rows.fetchall()
+    assert len(drafts) == 3
+    assert drafts[0]["suggested_attachment"] == "handbook-cdo.pdf"
+    assert drafts[1]["suggested_attachment"] is None
+    assert drafts[2]["suggested_attachment"] == "handbook-zero.pdf"

@@ -473,11 +473,11 @@ async def generate_drafts(
                 """INSERT INTO drafts
                    (conversation_id, trigger_message_id, draft_text, justification,
                     draft_group_id, variation_index, approach, prompt_hash, operator_instruction,
-                    situation_summary)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    situation_summary, suggested_attachment)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (conversation_id, trigger_message_id, draft_text, justification,
                  draft_group_id, i, approach_name, prompt_hash, operator_instruction,
-                 situation_summary),
+                 situation_summary, suggested_attachment),
             )
             drafts.append({
                 "id": cursor.lastrowid,
@@ -553,9 +553,9 @@ async def regenerate_draft(
             existing = await row.fetchone()
             if existing:
                 await db.execute(
-                    """UPDATE drafts SET draft_text = ?, justification = ?, prompt_hash = ?, operator_instruction = ?, situation_summary = ?
+                    """UPDATE drafts SET draft_text = ?, justification = ?, prompt_hash = ?, operator_instruction = ?, situation_summary = ?, suggested_attachment = ?
                        WHERE id = ?""",
-                    (draft_text, justification, prompt_hash, operator_instruction, situation_summary, existing["id"]),
+                    (draft_text, justification, prompt_hash, operator_instruction, situation_summary, suggested_attachment, existing["id"]),
                 )
                 draft_group_id = existing["draft_group_id"]
             await db.commit()
@@ -571,7 +571,7 @@ async def regenerate_draft(
                 "draft_text": d["draft_text"], "justification": d["justification"],
                 "status": d["status"], "draft_group_id": d["draft_group_id"],
                 "variation_index": d["variation_index"], "approach": d["approach"],
-                "suggested_attachment": suggested_attachment if d["variation_index"] == draft_index else None,
+                "suggested_attachment": d["suggested_attachment"],
             } for d in all_drafts]
 
         else:
@@ -605,11 +605,11 @@ async def regenerate_draft(
                     """INSERT INTO drafts
                        (conversation_id, trigger_message_id, draft_text, justification,
                         draft_group_id, variation_index, approach, prompt_hash, operator_instruction,
-                        situation_summary)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        situation_summary, suggested_attachment)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (conversation_id, trigger_message_id, draft_text, justification,
                      draft_group_id, i, approach_name, prompt_hash, operator_instruction,
-                     situation_summary),
+                     situation_summary, suggested_attachment),
                 )
                 drafts.append({
                     "id": cursor.lastrowid, "conversation_id": conversation_id,

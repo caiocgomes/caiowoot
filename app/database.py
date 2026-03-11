@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS drafts (
     prompt_hash TEXT,
     operator_instruction TEXT,
     situation_summary TEXT,
+    suggested_attachment TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -213,6 +214,8 @@ MIGRATIONS = [
     """),
     ("scheduled_sends_status_send_at_index",
      "CREATE INDEX IF NOT EXISTS idx_scheduled_sends_status_send_at ON scheduled_sends (status, send_at)"),
+    ("suggested_attachment_on_drafts",
+     "ALTER TABLE drafts ADD COLUMN suggested_attachment TEXT"),
 ]
 
 _chroma_client = None

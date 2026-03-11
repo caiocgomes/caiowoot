@@ -441,6 +441,30 @@ async function loadSuggestedAttachment(filename) {
   }
 }
 
+// --- Quick-attach buttons ---
+async function loadQuickAttachButtons() {
+  try {
+    const res = await fetch("/api/attachments");
+    if (!res.ok) return;
+    const files = await res.json();
+    if (!files.length) return;
+    const container = document.getElementById("quick-attach");
+    container.innerHTML = "";
+    files.forEach(filename => {
+      const btn = document.createElement("button");
+      btn.className = "quick-attach-btn";
+      btn.title = filename;
+      const label = filename.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      btn.textContent = "\uD83D\uDCCE " + label;
+      btn.onclick = () => loadSuggestedAttachment(filename);
+      container.appendChild(btn);
+    });
+    container.classList.add("visible");
+  } catch (e) {
+    console.error("Failed to load quick-attach buttons:", e);
+  }
+}
+
 // --- Send ---
 async function sendMessage() {
   const input = document.getElementById("draft-input");
@@ -1512,4 +1536,5 @@ document.getElementById("attachment-remove").onclick = removeAttachment;
 
 initScheduleUI();
 loadConversations();
+loadQuickAttachButtons();
 connectWS();
