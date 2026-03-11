@@ -290,6 +290,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
 /* Mobile */
 @media (max-width: 767px) {
+  /* Prevent horizontal overflow */
+  html, body { overflow-x: hidden; max-width: 100vw; }
+
   /* Default mobile state: sidebar visible as full-width list, main hidden */
   #sidebar { width: 100%; border-right: none; }
   #main { display: none; width: 100%; min-height: 0; }
@@ -326,14 +329,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 
   /* Instruction bar compact */
   #instruction-bar { margin-bottom: 4px; }
+  #instruction-bar .instruction-row { flex-wrap: wrap; }
+  #instruction-input { min-width: 0; }
+  #regen-instruction-btn { flex-shrink: 0; }
 
-  /* Textarea full width */
-  #draft-input { min-height: 100px; width: 100%; }
+  /* Compose area - prevent overflow */
+  #compose { padding: 8px 10px; overflow: hidden; max-width: 100%; }
+
+  /* Textarea - taller on mobile */
+  #draft-input { min-height: 140px; width: 100%; }
   #clear-draft-btn { min-width: 44px; min-height: 44px; width: 44px; height: 44px; font-size: 20px; top: 4px; right: 4px; }
   #draft-area { flex-direction: column; gap: 6px; }
-  #btn-group { flex-direction: row; justify-content: flex-end; width: 100%; gap: 8px; }
-  #send-btn, #rewrite-btn, #attach-btn { min-height: 44px; }
-  #compose { padding: 8px 10px; }
+  #btn-group { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; width: 100%; gap: 8px; }
+  #send-btn, #rewrite-btn, #attach-btn, #schedule-btn { min-height: 44px; flex-shrink: 0; }
+  #send-btn { flex: 1; }
+  #schedule-btn { flex: 1; }
 }
 </style>
 </head>
