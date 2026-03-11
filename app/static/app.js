@@ -444,13 +444,34 @@ async function loadSuggestedAttachment(filename) {
 // --- Quick-attach buttons ---
 async function loadQuickAttachButtons() {
   try {
-    const res = await fetch("/api/attachments");
-    if (!res.ok) return;
-    const files = await res.json();
-    if (!files.length) return;
     const container = document.getElementById("quick-attach");
     container.innerHTML = "";
-    files.forEach(filename => {
+
+    // Fetch both sources in parallel
+    const [knowledgeRes, recentRes] = await Promise.all([
+      fetch("/api/attachments"),
+      fetch("/api/recent-attachments"),
+    ]);
+
+    const knowledgeFiles = knowledgeRes.ok ? await knowledgeRes.json() : [];
+    const recentFiles = recentRes.ok ? await recentRes.json() : [];
+
+    // Recent attachments first (from sent history)
+    const added = new Set();
+    recentFiles.forEach(item => {
+      const btn = document.createElement("button");
+      btn.className = "quick-attach-btn recent";
+      btn.title = item.filename;
+      const label = item.filename.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      btn.textContent = "\uD83D\uDCCE " + label;
+      btn.onclick = () => loadRecentAttachment(item.stored, item.filename);
+      container.appendChild(btn);
+      added.add(item.filename);
+    });
+
+    // Knowledge attachments (skip if already shown from recents)
+    knowledgeFiles.forEach(filename => {
+      if (added.has(filename)) return;
       const btn = document.createElement("button");
       btn.className = "quick-attach-btn";
       btn.title = filename;
@@ -459,9 +480,25 @@ async function loadQuickAttachButtons() {
       btn.onclick = () => loadSuggestedAttachment(filename);
       container.appendChild(btn);
     });
-    container.classList.add("visible");
+
+    if (container.children.length > 0) {
+      container.classList.add("visible");
+    }
   } catch (e) {
     console.error("Failed to load quick-attach buttons:", e);
+  }
+}
+
+async function loadRecentAttachment(storedFilename, originalFilename) {
+  try {
+    const res = await fetch(`/api/recent-attachments/${encodeURIComponent(storedFilename)}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    attachedFile = new File([blob], originalFilename, { type: blob.type });
+    document.getElementById("attachment-name").textContent = `\uD83D\uDCCE ${originalFilename}`;
+    document.getElementById("attachment-bar").style.display = "block";
+  } catch (e) {
+    console.error("Failed to load recent attachment:", e);
   }
 }
 
