@@ -355,7 +355,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 </head>
 <body>
 <div id="sidebar">
-  <div id="sidebar-header">CaioWoot <button id="settings-gear" onclick="openSettings()" title="Configuracoes">&#x2699;</button></div>
+  <div id="sidebar-header">CaioWoot <button id="notif-btn" style="display:none;background:none;border:1px solid #ddd;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#555;margin-left:auto;margin-right:8px;">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes">&#x2699;</button></div>
   <div id="sidebar-tabs">
     <button class="sidebar-tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversas</button>
     <button class="sidebar-tab" data-tab="knowledge" onclick="switchTab('knowledge')">Conhecimento</button>
@@ -561,6 +561,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
 }
 </script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

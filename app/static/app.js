@@ -8,6 +8,71 @@ let attachedFile = null;
 let lastTriggerMessageId = null;
 let ws = null;
 
+// --- Notifications ---
+const conversationNames = new Map();
+let unreadCount = 0;
+let lastSoundTime = 0;
+const originalTitle = document.title;
+
+function playNotificationSound() {
+  const now = Date.now();
+  if (now - lastSoundTime < 3000) return;
+  lastSoundTime = now;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = "sine";
+    gain.gain.value = 0.15;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) { /* silent fail */ }
+}
+
+function updateTitleBadge() {
+  document.title = unreadCount > 0 ? `(${unreadCount}) ${originalTitle}` : originalTitle;
+}
+
+function notifyInbound(conversationId, messageContent) {
+  const isHidden = document.visibilityState === "hidden";
+  const isDifferentConversation = conversationId !== currentConversationId;
+
+  if (!isHidden && !isDifferentConversation) return;
+
+  unreadCount++;
+  updateTitleBadge();
+  playNotificationSound();
+
+  if (isHidden && Notification.permission === "granted") {
+    const name = conversationNames.get(conversationId) || "Nova mensagem";
+    const body = messageContent ? messageContent.substring(0, 100) : "";
+    const n = new Notification(name, { body, tag: String(conversationId), renotify: true });
+    n.onclick = () => {
+      window.focus();
+      openConversation(conversationId);
+      n.close();
+    };
+  }
+}
+
+function initNotificationButton() {
+  const btn = document.getElementById("notif-btn");
+  if (!btn) return;
+  if (!("Notification" in window)) { btn.style.display = "none"; return; }
+  if (Notification.permission === "granted") { btn.style.display = "none"; return; }
+  if (Notification.permission === "denied") { btn.textContent = "Notificações bloqueadas"; btn.disabled = true; btn.style.opacity = "0.5"; return; }
+  btn.style.display = "inline-block";
+  btn.onclick = async () => {
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") { btn.style.display = "none"; }
+    else if (perm === "denied") { btn.textContent = "Notificações bloqueadas"; btn.disabled = true; btn.style.opacity = "0.5"; }
+  };
+}
+
 // --- Auth: intercept 401 responses ---
 const _origFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -57,6 +122,8 @@ document.addEventListener("visibilitychange", () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       connectWS();
     }
+    unreadCount = 0;
+    updateTitleBadge();
     loadConversations();
   }
 });
@@ -64,6 +131,9 @@ document.addEventListener("visibilitychange", () => {
 function handleWSEvent(data) {
   console.log("WS event:", data.type, "conv:", data.conversation_id, "current:", currentConversationId);
   if (data.type === "new_message") {
+    if (data.message.direction === "inbound") {
+      notifyInbound(data.conversation_id, data.message.content);
+    }
     loadConversations();
     if (data.conversation_id === currentConversationId) {
       appendMessage(data.message);
@@ -119,6 +189,7 @@ function renderConversationList(conversations) {
   list.innerHTML = "";
 
   for (const conv of conversations) {
+    conversationNames.set(conv.id, conv.contact_name || conv.phone_number);
     const div = document.createElement("div");
     div.className = "conv-item" +
       (conv.id === currentConversationId ? " active" : "") +
@@ -1538,3 +1609,4 @@ initScheduleUI();
 loadConversations();
 loadQuickAttachButtons();
 connectWS();
+initNotificationButton();
