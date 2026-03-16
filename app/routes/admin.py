@@ -202,3 +202,27 @@ async def analysis_results(request: Request, db: aiosqlite.Connection = Depends(
         "unanswered": unanswered,
         "assessments_by_operator": assessments_by_operator,
     }
+
+
+@router.post("/admin/reset-qualifying/{phone}")
+async def reset_qualifying(request: Request, phone: str, db: aiosqlite.Connection = Depends(get_db_connection)):
+    """Reset is_qualified to False for a phone number (for testing). Deletes bot messages too."""
+    if not _check_admin(request):
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+
+    row = await db.execute("SELECT id FROM conversations WHERE phone_number = ?", (phone,))
+    conv = await row.fetchone()
+    if not conv:
+        return JSONResponse({"detail": "Conversation not found"}, status_code=404)
+
+    conv_id = conv["id"]
+
+    # Reset qualifying flag
+    await db.execute("UPDATE conversations SET is_qualified = 0 WHERE id = ?", (conv_id,))
+
+    # Delete bot messages so the qualifying flow starts fresh
+    await db.execute("DELETE FROM messages WHERE conversation_id = ? AND sent_by = 'bot'", (conv_id,))
+
+    await db.commit()
+
+    return {"status": "ok", "conversation_id": conv_id, "phone": phone}
