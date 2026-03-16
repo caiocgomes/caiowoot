@@ -9,353 +9,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ffffff">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100dvh; display: flex; background: #f5f5f5; }
-
-/* Sidebar */
-#sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
-#sidebar-header { padding: 16px; border-bottom: 1px solid #ddd; font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
-#conversation-list { flex: 1; overflow-y: auto; }
-.conv-item { padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
-.conv-item:hover { background: #f0f0f0; }
-.conv-item.active { background: #e3f2fd; }
-.conv-item.is-new .conv-name,
-.conv-item.needs-reply .conv-name { font-weight: 700; }
-.conv-new-dot { display: inline-block; width: 8px; height: 8px; background: #25D366; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-.conv-name { font-weight: 400; font-size: 14px; }
-.conv-preview { font-size: 13px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-time { font-size: 11px; color: #999; float: right; }
-.conv-responder { font-size: 11px; color: #25D366; margin-top: 2px; font-weight: 500; }
-
-/* Main area */
-#main { flex: 1; display: flex; flex-direction: column; }
-#main-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #999; font-size: 16px; }
-#chat-wrapper { flex: 1; display: none; flex-direction: row; overflow: hidden; }
-#chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#chat-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; font-weight: 600; }
-#messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; }
-
-/* Context panel */
-#context-panel { width: 280px; border-left: 1px solid #ddd; background: #fff; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
-#context-panel-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #888; display: flex; justify-content: space-between; align-items: center; }
-#ctx-classify-btn { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; font-size: 11px; color: #888; cursor: pointer; text-transform: none; font-weight: 400; }
-#ctx-classify-btn:hover { background: #f5f5f5; color: #555; }
-#ctx-classify-btn:disabled { opacity: 0.5; cursor: default; }
-.ctx-section { padding: 12px 16px; border-bottom: 1px solid #eee; }
-.ctx-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; margin-bottom: 6px; }
-#ctx-product-select { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; }
-.ctx-stage-list { list-style: none; }
-.ctx-stage-item { padding: 6px 8px; font-size: 13px; cursor: pointer; border-radius: 6px; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; color: #666; }
-.ctx-stage-item:hover { background: #f5f5f5; }
-.ctx-stage-item.active { background: #e8f5e9; color: #2e7d32; font-weight: 600; }
-.ctx-stage-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; }
-.ctx-stage-item.active .ctx-stage-dot { background: #25D366; border-color: #25D366; }
-.ctx-stage-item.done .ctx-stage-dot { background: #aaa; border-color: #aaa; }
-#ctx-summary-text { font-size: 13px; line-height: 1.5; color: #555; white-space: pre-wrap; }
-.msg { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 8px; font-size: 14px; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; }
-.msg.inbound { background: #fff; border: 1px solid #ddd; align-self: flex-start; border-bottom-left-radius: 4px; }
-.msg.outbound { background: #dcf8c6; align-self: flex-end; border-bottom-right-radius: 4px; margin-left: auto; }
-.msg-time { display: block; font-size: 11px; color: #999; text-align: right; margin-top: 4px; }
-.msg.outbound .msg-time { color: #7cb381; }
-.date-separator { text-align: center; font-size: 12px; color: #888; margin: 16px 0 8px; }
-.date-separator span { background: #e8e8e8; padding: 4px 12px; border-radius: 8px; }
-
-/* Compose area */
-#compose { padding: 12px 16px; border-top: 1px solid #ddd; background: #fff; }
-
-/* Draft variations */
-#draft-cards { display: flex; gap: 8px; margin-bottom: 8px; }
-.draft-card { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 13px; background: #fafafa; cursor: pointer; position: relative; max-height: 120px; overflow-y: auto; line-height: 1.4; }
-.draft-card:hover { border-color: #999; }
-.draft-card.selected { border-color: #25D366; background: #f0faf0; }
-.draft-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.draft-card-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; }
-.draft-card-actions { display: flex; gap: 4px; }
-.draft-card-actions button { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px; }
-.draft-card-actions button:hover { background: #eee; }
-.draft-card-text { font-size: 13px; color: #333; white-space: pre-wrap; }
-.draft-attachment-suggestion { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 4px 8px; background: #e3f2fd; border-radius: 4px; font-size: 12px; color: #1565c0; }
-.draft-attach-btn { padding: 2px 8px; background: #1565c0; color: #fff; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; }
-.draft-attach-btn:hover { background: #0d47a1; }
-#regen-all-btn { background: none; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 12px; white-space: nowrap; align-self: center; }
-#regen-all-btn:hover { background: #f0f0f0; }
-#draft-cards-container { display: none; }
-.draft-cards-row { display: flex; gap: 8px; align-items: stretch; }
-
-/* Instruction bar */
-#instruction-bar { margin-bottom: 8px; }
-#instruction-bar .instruction-row { display: flex; gap: 8px; align-items: center; }
-#instruction-input { flex: 1; padding: 8px 12px; border: 1px dashed #ccc; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fffef5; }
-#instruction-input::placeholder { color: #bbb; }
-#regen-instruction-btn { padding: 8px 14px; background: #fff; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; color: #555; }
-#regen-instruction-btn:hover { background: #f0f0f0; border-color: #999; }
-
-/* Justification */
-#justification { font-size: 12px; color: #888; padding: 8px 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; font-style: italic; display: none; }
-
-/* Draft area */
-#draft-area { display: flex; gap: 8px; align-items: flex-end; }
-#draft-input-wrapper { flex: 1; position: relative; }
-#draft-input { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 200px; max-height: 500px; }
-#clear-draft-btn { display: none; position: absolute; top: 6px; right: 6px; min-width: 44px; min-height: 44px; width: 32px; height: 32px; padding: 0; background: #e0e0e0; border: none; border-radius: 50%; font-size: 18px; line-height: 1; color: #555; cursor: pointer; z-index: 2; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
-#clear-draft-btn:hover { background: #ccc; color: #333; }
-
-/* Attachment */
-#attachment-bar { display: none; margin-bottom: 8px; padding: 6px 10px; background: #f0f0f0; border-radius: 6px; font-size: 13px; }
-#attachment-bar span { margin-right: 8px; }
-#attachment-remove { background: none; border: none; cursor: pointer; color: #c00; font-weight: 600; }
-
-/* Quick-attach buttons */
-#quick-attach { display: none; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-#quick-attach.visible { display: flex; }
-.quick-attach-btn { padding: 4px 10px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 14px; font-size: 12px; cursor: pointer; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-.quick-attach-btn:hover { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
-
-#btn-group { display: flex; flex-direction: column; gap: 4px; }
-#send-btn { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-#send-btn:hover { background: #1da851; }
-#send-btn:disabled { background: #ccc; cursor: not-allowed; }
-#rewrite-btn { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; color: #555; }
-#rewrite-btn:hover { background: #f0f0f0; }
-#rewrite-btn:disabled { color: #bbb; cursor: not-allowed; }
-#attach-btn { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; cursor: pointer; }
-#attach-btn:hover { background: #f0f0f0; }
-#attach-file { display: none; }
-
-/* Sidebar tabs */
-#sidebar-tabs { display: flex; border-bottom: 1px solid #ddd; }
-.sidebar-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; border: none; border-bottom: 2px solid transparent; color: #888; }
-.sidebar-tab.active { color: #333; border-bottom-color: #25D366; }
-.sidebar-tab:hover { background: #f8f8f8; }
-
-/* Knowledge panel */
-#knowledge-list { flex: 1; overflow-y: auto; display: none; }
-.kb-item { padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
-.kb-item:hover { background: #f0f0f0; }
-.kb-item.active { background: #e3f2fd; }
-.kb-item-name { font-weight: 600; font-size: 14px; }
-.kb-item-time { font-size: 11px; color: #999; float: right; }
-#kb-new-btn { display: block; width: calc(100% - 32px); margin: 12px 16px; padding: 10px; background: #fff; border: 1px dashed #ccc; border-radius: 8px; font-size: 13px; cursor: pointer; color: #666; text-align: center; }
-#kb-new-btn:hover { background: #f8f8f8; border-color: #999; }
-
-/* Knowledge editor (main area) */
-#kb-editor { display: none; flex: 1; flex-direction: column; }
-#kb-editor-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
-#kb-editor-name { font-weight: 600; font-size: 16px; flex: 1; }
-#kb-editor-actions { display: flex; gap: 8px; }
-#kb-editor-actions button { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; }
-#kb-save-btn { background: #25D366 !important; color: #fff !important; border-color: #25D366 !important; font-weight: 600; }
-#kb-save-btn:hover { background: #1da851 !important; }
-#kb-delete-btn { color: #c00; }
-#kb-delete-btn:hover { background: #fee; }
-#kb-editor-body { flex: 1; padding: 16px; overflow: hidden; display: flex; }
-#kb-editor-textarea { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 14px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; resize: none; }
-
-/* Knowledge new doc form */
-#kb-new-form { display: none; flex: 1; flex-direction: column; }
-#kb-new-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
-#kb-new-name-input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
-#kb-new-actions { display: flex; gap: 8px; }
-#kb-new-actions button { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; }
-#kb-create-btn { background: #25D366 !important; color: #fff !important; border-color: #25D366 !important; font-weight: 600; }
-#kb-cancel-btn { color: #666; }
-#kb-new-body { flex: 1; padding: 16px; overflow: hidden; display: flex; }
-#kb-new-textarea { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 14px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; resize: none; }
-
-/* Review panel (sidebar) */
-#review-list { flex: 1; overflow-y: auto; display: none; }
-#review-stats { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
-.review-stats-row { display: flex; gap: 12px; }
-.review-stats-row.history { margin-top: 6px; font-size: 12px; color: #999; }
-.review-stat { display: flex; align-items: center; gap: 4px; }
-.review-stat-count { font-weight: 600; color: #333; }
-.review-item { padding: 12px 16px; border-bottom: 1px solid #eee; cursor: pointer; }
-.review-item:hover { background: #f0f0f0; }
-.review-item.active { background: #e3f2fd; }
-.review-item-situation { font-size: 13px; color: #333; margin-bottom: 4px; line-height: 1.3; }
-.review-item-msg { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.review-item-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; }
-.review-item-badge.edited { background: #fff3e0; color: #e65100; }
-.review-item-badge.confirmed { background: #e8f5e9; color: #2e7d32; }
-#review-empty { padding: 24px 16px; text-align: center; color: #999; font-size: 13px; }
-
-/* Rules section in sidebar */
-#rules-section-header { padding: 10px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #888; border-top: 1px solid #ddd; border-bottom: 1px solid #eee; background: #fafafa; }
-.rule-item { padding: 10px 16px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-.rule-item:hover { background: #f0f0f0; }
-.rule-item.active { background: #e3f2fd; }
-.rule-item.inactive { opacity: 0.5; }
-.rule-toggle { width: 36px; height: 20px; border-radius: 10px; background: #ccc; border: none; cursor: pointer; position: relative; flex-shrink: 0; }
-.rule-toggle.on { background: #25D366; }
-.rule-toggle::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left 0.2s; }
-.rule-toggle.on::after { left: 18px; }
-.rule-text-preview { font-size: 13px; color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#rules-empty { padding: 16px; text-align: center; color: #bbb; font-size: 12px; }
-
-/* Review detail (main area) */
-#review-detail { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-#review-detail-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
-#review-detail-header h3 { font-size: 15px; margin-bottom: 4px; }
-#review-back-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; }
-#review-detail-header .review-detail-time { font-size: 12px; color: #999; }
-#review-detail-body { flex: 1; overflow-y: auto; padding: 16px; }
-.review-section { margin-bottom: 16px; }
-.review-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #888; margin-bottom: 6px; }
-.review-section-content { font-size: 14px; line-height: 1.5; color: #333; background: #f9f9f9; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; }
-.review-diff { display: flex; gap: 12px; }
-.review-diff-col { flex: 1; }
-.review-diff-col .review-section-content { min-height: 60px; }
-.review-diff-col.draft { border-left: 3px solid #ffcdd2; }
-.review-diff-col.final { border-left: 3px solid #c8e6c9; }
-.review-annotation { background: #fffde7; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; border: 1px solid #fff9c4; }
-#review-detail-actions { padding: 16px; border-top: 1px solid #ddd; background: #fff; display: flex; gap: 8px; align-items: center; }
-.review-action-btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid #ddd; background: #fff; }
-.review-action-btn:hover { background: #f5f5f5; }
-.review-action-btn.ok { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
-.review-action-btn.ok:hover { background: #c8e6c9; }
-.review-action-btn.reject { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
-.review-action-btn.reject:hover { background: #ffcdd2; }
-.review-action-btn.promote { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
-.review-action-btn.promote:hover { background: #bbdefb; }
-
-/* Rule detail (main area) */
-#rule-detail { display: none; flex: 1; flex-direction: column; }
-#rule-detail-header { padding: 16px; border-bottom: 1px solid #ddd; background: #fff; display: flex; align-items: center; gap: 12px; }
-#rule-detail-header span { font-weight: 600; font-size: 15px; }
-#rule-detail-body { flex: 1; padding: 16px; }
-#rule-edit-textarea { width: 100%; min-height: 120px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; line-height: 1.5; }
-#rule-detail-actions { padding: 16px; border-top: 1px solid #ddd; background: #fff; display: flex; gap: 8px; }
-
-/* Settings modal */
-#settings-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: center; justify-content: center; }
-#settings-modal.open { display: flex; }
-#settings-modal-content { background: #fff; border-radius: 12px; width: 90%; max-width: 640px; max-height: 85vh; box-shadow: 0 8px 32px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; }
-#settings-modal-header { padding: 16px 20px; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; }
-#settings-modal-header h3 { font-size: 16px; margin: 0; }
-#settings-close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #888; padding: 4px 8px; }
-#settings-close-btn:hover { color: #333; }
-#settings-tabs { display: flex; border-bottom: 1px solid #ddd; }
-.settings-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; border: none; border-bottom: 2px solid transparent; color: #888; }
-.settings-tab.active { color: #333; border-bottom-color: #25D366; }
-.settings-tab:hover { background: #f8f8f8; }
-#settings-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
-.settings-field { margin-bottom: 16px; }
-.settings-field-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.settings-field label { font-size: 13px; font-weight: 600; color: #555; }
-.settings-field .reset-btn { font-size: 11px; color: #888; background: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
-.settings-field .reset-btn:hover { background: #f0f0f0; color: #333; }
-.settings-field textarea { width: 100%; min-height: 80px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 13px; resize: vertical; line-height: 1.4; }
-.settings-field input[type="text"] { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; }
-#settings-footer { padding: 12px 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 8px; }
-#settings-save-btn { padding: 8px 20px; background: #25D366; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-#settings-save-btn:hover { background: #1da851; }
-.settings-status { font-size: 12px; color: #25D366; font-weight: 600; align-self: center; margin-right: auto; }
-#settings-gear { background: none; border: none; font-size: 18px; cursor: pointer; padding: 0 4px; opacity: 0.6; }
-#settings-gear:hover { opacity: 1; }
-
-/* Promote modal */
-#promote-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
-#promote-modal.open { display: flex; }
-#promote-modal-content { background: #fff; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
-#promote-modal-content h3 { font-size: 16px; margin-bottom: 12px; }
-#promote-rule-input { width: 100%; min-height: 100px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; margin-bottom: 12px; }
-#promote-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-
-/* Schedule button and dropdown */
-#schedule-wrapper { position: relative; }
-#schedule-btn { padding: 10px 12px; background: #fff; border: 1px solid #25D366; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: #25D366; white-space: nowrap; }
-#schedule-btn:hover { background: #f0faf0; }
-#schedule-dropdown { display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 50; min-width: 200px; overflow: hidden; }
-#schedule-dropdown.open { display: block; }
-.schedule-option { padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
-.schedule-option:last-child { border-bottom: none; }
-.schedule-option:hover { background: #f0faf0; }
-#schedule-custom-row { display: none; padding: 10px 14px; border-top: 1px solid #eee; }
-#schedule-custom-row input { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; font-family: inherit; }
-#schedule-custom-row button { margin-top: 6px; padding: 6px 12px; background: #25D366; color: #fff; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; width: 100%; }
-
-/* Scheduled send pills */
-.scheduled-pill { background: #fffde7; border: 1px solid #fff9c4; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-.scheduled-pill-icon { font-size: 16px; flex-shrink: 0; }
-.scheduled-pill-info { flex: 1; min-width: 0; }
-.scheduled-pill-time { font-weight: 600; color: #f57f17; font-size: 12px; }
-.scheduled-pill-preview { color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.scheduled-pill-cancel { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: #c00; flex-shrink: 0; }
-.scheduled-pill-cancel:hover { background: #fee; }
-#scheduled-pills { margin-bottom: 0; }
-
-/* Clock icon for conversation list */
-.conv-clock { font-size: 12px; margin-left: 4px; vertical-align: middle; }
-
-/* Hamburger button - hidden on desktop */
-#hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; margin-right: 8px; }
-
-/* Sidebar backdrop */
-#sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
-
-/* Mobile */
-@media (max-width: 767px) {
-  /* Prevent horizontal overflow */
-  html, body { overflow-x: hidden; max-width: 100vw; }
-
-  /* Default mobile state: sidebar visible as full-width list, main hidden */
-  #sidebar { width: 100%; border-right: none; }
-  #main { display: none; width: 100%; min-height: 0; }
-  #hamburger-btn { display: inline-block; }
-  #review-back-btn { display: inline-block; }
-  #context-panel { display: none; }
-
-  /* Sticky chat header */
-  #chat-header { position: sticky; top: 0; z-index: 10; }
-
-  /* When a conversation is selected: sidebar hidden, main visible */
-  body.mobile-chat-active #sidebar { display: none; }
-  body.mobile-chat-active #main { display: flex; }
-
-  /* Overlay mode: sidebar over chat (for switching conversations) */
-  body.mobile-chat-active #sidebar.open { display: flex; position: fixed; top: 0; left: 0; bottom: 0; width: 85vw; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.2); }
-  body.mobile-chat-active #sidebar-backdrop.open { display: block; }
-
-  .msg { max-width: 90%; }
-
-  /* Draft cards as compact pills on mobile */
-  #draft-cards { flex-direction: row; gap: 6px; margin-bottom: 6px; }
-  .draft-cards-row { flex-direction: row; align-items: center; }
-  .draft-card { flex: 1; max-height: none; overflow: hidden; padding: 8px 10px; text-align: center; border-radius: 20px; }
-  .draft-card-text { display: none; }
-  .draft-card-header { margin-bottom: 0; justify-content: center; }
-  .draft-card-actions { display: none; }
-  .draft-card-label { font-size: 12px; }
-  .draft-card.selected { border-color: #25D366; background: #e8f5e9; }
-  #regen-all-btn { padding: 8px; font-size: 16px; border-radius: 20px; min-height: 44px; }
-
-  /* Justification compact */
-  #justification { font-size: 11px; padding: 4px 8px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  /* Instruction bar compact */
-  #instruction-bar { margin-bottom: 4px; }
-  #instruction-bar .instruction-row { flex-wrap: wrap; }
-  #instruction-input { min-width: 0; }
-  #regen-instruction-btn { flex-shrink: 0; }
-
-  /* Compose area - prevent overflow */
-  #compose { padding: 8px 10px; overflow: hidden; max-width: 100%; }
-
-  /* Textarea - same as desktop */
-  #draft-input { min-height: 200px; width: 100%; }
-  #clear-draft-btn { min-width: 44px; min-height: 44px; width: 44px; height: 44px; font-size: 20px; top: 4px; right: 4px; }
-  #draft-area { flex-direction: column; gap: 6px; align-items: stretch; }
-  #btn-group { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; width: 100%; gap: 8px; }
-  #send-btn, #rewrite-btn, #attach-btn, #schedule-btn { min-height: 44px; flex-shrink: 0; }
-  #send-btn { flex: 1; }
-  #schedule-btn { flex: 1; }
-}
-</style>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/sidebar.css">
+<link rel="stylesheet" href="css/compose.css">
+<link rel="stylesheet" href="css/context-panel.css">
+<link rel="stylesheet" href="css/knowledge.css">
+<link rel="stylesheet" href="css/review.css">
+<link rel="stylesheet" href="css/campaigns.css">
+<link rel="stylesheet" href="css/settings.css">
+<link rel="stylesheet" href="css/mobile.css">
 </head>
 <body>
 <div id="sidebar">
-  <div id="sidebar-header">CaioWoot <button id="notif-btn" style="display:none;background:none;border:1px solid #ddd;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#555;margin-left:auto;margin-right:8px;">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes">&#x2699;</button></div>
+  <div id="sidebar-header">CaioWoot <button id="notif-btn" class="notif-btn">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes">&#x2699;</button></div>
   <div id="sidebar-tabs">
     <button class="sidebar-tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversas</button>
     <button class="sidebar-tab" data-tab="knowledge" onclick="switchTab('knowledge')">Conhecimento</button>
@@ -370,13 +37,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
   <div id="review-list">
     <div id="review-stats"></div>
     <div id="review-items"></div>
-    <div id="review-empty" style="display:none;">Nenhuma anotação pendente.</div>
+    <div id="review-empty">Nenhuma anotação pendente.</div>
     <div id="rules-section-header">Regras aprendidas</div>
     <div id="rules-items"></div>
-    <div id="rules-empty" style="display:none;">Nenhuma regra criada.</div>
+    <div id="rules-empty">Nenhuma regra criada.</div>
   </div>
-  <div id="campaign-list" style="display:none;flex:1;overflow-y:auto;">
-    <button id="campaign-new-btn" onclick="showCampaignForm()" style="display:block;width:calc(100% - 32px);margin:12px 16px;padding:10px;background:#fff;border:1px dashed #ccc;border-radius:8px;font-size:13px;cursor:pointer;color:#666;text-align:center;">+ Nova campanha</button>
+  <div id="campaign-list">
+    <button id="campaign-new-btn" onclick="showCampaignForm()">+ Nova campanha</button>
     <div id="campaign-items"></div>
   </div>
 </div>
@@ -451,67 +118,67 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
       <button class="review-action-btn" onclick="cancelRuleEdit()">Cancelar</button>
     </div>
   </div>
-  <div id="campaign-form" style="display:none;flex:1;flex-direction:column;overflow-y:auto;">
-    <div style="padding:16px;border-bottom:1px solid #ddd;background:#fff;font-weight:600;font-size:15px;">Nova Campanha</div>
-    <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
-      <div>
-        <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Nome da campanha</label>
-        <input id="campaign-name-input" type="text" placeholder="Ex: Workshop LLMs Marco" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;font-family:inherit;">
+  <div id="campaign-form">
+    <div class="campaign-form-header">Nova Campanha</div>
+    <div class="campaign-form-body">
+      <div class="campaign-form-field">
+        <label class="campaign-form-label">Nome da campanha</label>
+        <input id="campaign-name-input" type="text" placeholder="Ex: Workshop LLMs Marco" class="campaign-form-input">
       </div>
-      <div>
-        <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">CSV de contatos (colunas: telefone, nome)</label>
-        <input id="campaign-csv-input" type="file" accept=".csv" style="font-size:13px;">
+      <div class="campaign-form-field">
+        <label class="campaign-form-label">CSV de contatos (colunas: telefone, nome)</label>
+        <input id="campaign-csv-input" type="file" accept=".csv" class="campaign-form-file">
       </div>
-      <div>
-        <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Mensagem base</label>
-        <textarea id="campaign-msg-input" placeholder="Oi {{nome}}, tudo bem? ..." style="width:100%;min-height:120px;border:1px solid #ddd;border-radius:8px;padding:10px;font-family:inherit;font-size:13px;resize:vertical;line-height:1.4;"></textarea>
+      <div class="campaign-form-field">
+        <label class="campaign-form-label">Mensagem base</label>
+        <textarea id="campaign-msg-input" placeholder="Oi {{nome}}, tudo bem? ..." class="campaign-form-textarea"></textarea>
       </div>
-      <div>
-        <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Imagem (opcional)</label>
-        <input id="campaign-img-input" type="file" accept="image/*" style="font-size:13px;">
+      <div class="campaign-form-field">
+        <label class="campaign-form-label">Imagem (opcional)</label>
+        <input id="campaign-img-input" type="file" accept="image/*" class="campaign-form-file">
       </div>
-      <div style="display:flex;gap:16px;">
-        <div style="flex:1;">
-          <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Intervalo minimo (segundos)</label>
-          <input id="campaign-min-interval" type="number" value="60" min="10" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+      <div class="campaign-form-row">
+        <div class="campaign-form-field" style="flex:1;">
+          <label class="campaign-form-label">Intervalo minimo (segundos)</label>
+          <input id="campaign-min-interval" type="number" value="60" min="10" class="campaign-form-input">
         </div>
-        <div style="flex:1;">
-          <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">Intervalo maximo (segundos)</label>
-          <input id="campaign-max-interval" type="number" value="180" min="10" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+        <div class="campaign-form-field" style="flex:1;">
+          <label class="campaign-form-label">Intervalo maximo (segundos)</label>
+          <input id="campaign-max-interval" type="number" value="180" min="10" class="campaign-form-input">
         </div>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button onclick="cancelCampaignForm()" style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">Cancelar</button>
-        <button onclick="createCampaign()" style="padding:8px 16px;border:none;border-radius:8px;background:#25D366;color:#fff;cursor:pointer;font-size:13px;font-weight:600;">Criar campanha</button>
+      <div class="campaign-form-actions">
+        <button onclick="cancelCampaignForm()" class="campaign-btn-cancel">Cancelar</button>
+        <button onclick="createCampaign()" class="campaign-btn-create">Criar campanha</button>
       </div>
     </div>
   </div>
-  <div id="campaign-detail" style="display:none;flex:1;flex-direction:column;overflow-y:auto;">
-    <div id="campaign-detail-header" style="padding:16px;border-bottom:1px solid #ddd;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+  <div id="campaign-detail">
+    <div id="campaign-detail-header">
       <div>
-        <h3 id="campaign-detail-name" style="font-size:15px;margin:0;"></h3>
-        <span id="campaign-detail-status" style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;"></span>
+        <h3 id="campaign-detail-name"></h3>
+        <span id="campaign-detail-status" class="campaign-status-badge"></span>
       </div>
-      <div id="campaign-detail-actions" style="display:flex;gap:8px;"></div>
+      <div id="campaign-detail-actions"></div>
     </div>
-    <div id="campaign-detail-body" style="padding:16px;">
-      <div id="campaign-progress-section" style="margin-bottom:16px;">
-        <div style="display:flex;gap:16px;margin-bottom:8px;font-size:14px;">
-          <span id="campaign-sent-count" style="color:#2e7d32;font-weight:600;"></span>
-          <span id="campaign-failed-count" style="color:#c62828;font-weight:600;"></span>
-          <span id="campaign-pending-count" style="color:#888;font-weight:600;"></span>
+    <div id="campaign-detail-body">
+      <div id="campaign-progress-section" class="campaign-section">
+        <div class="campaign-counts">
+          <span id="campaign-sent-count" class="campaign-count-sent"></span>
+          <span id="campaign-failed-count" class="campaign-count-failed"></span>
+          <span id="campaign-pending-count" class="campaign-count-pending"></span>
         </div>
-        <div style="background:#eee;border-radius:4px;height:8px;overflow:hidden;">
-          <div id="campaign-progress-bar" style="height:100%;background:#25D366;transition:width 0.3s;"></div>
+        <div class="campaign-progress-track">
+          <div id="campaign-progress-bar" class="campaign-progress-fill"></div>
         </div>
       </div>
-      <div id="campaign-variations-section" style="margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:8px;">Variações</div>
+      <div id="campaign-variations-section" class="campaign-section">
+        <div class="campaign-section-label">Variações</div>
         <div id="campaign-variations-list"></div>
-        <div id="campaign-variations-actions" style="margin-top:8px;display:flex;gap:8px;"></div>
+        <div id="campaign-variations-actions" class="campaign-variations-actions"></div>
       </div>
       <div id="campaign-contacts-section">
-        <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#888;margin-bottom:8px;">Contatos</div>
+        <div class="campaign-section-label">Contatos</div>
         <div id="campaign-contacts-list"></div>
       </div>
     </div>
@@ -519,7 +186,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
   <div id="promote-modal">
     <div id="promote-modal-content">
       <h3>Promover a regra</h3>
-      <p style="font-size:13px;color:#666;margin-bottom:12px;">Edite o texto da regra antes de confirmar:</p>
+      <p class="promote-modal-hint">Edite o texto da regra antes de confirmar:</p>
       <textarea id="promote-rule-input"></textarea>
       <div id="promote-modal-actions">
         <button class="review-action-btn" onclick="closePromoteModal()">Cancelar</button>
@@ -631,6 +298,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
 }
 </script>
-<script src="app.js?v=16"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

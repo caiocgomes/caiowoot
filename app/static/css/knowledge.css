@@ -1,0 +1,34 @@
+/* Knowledge base editor and new doc form */
+
+#knowledge-list { flex: 1; overflow-y: auto; display: none; }
+.kb-item { padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--color-border-light); cursor: pointer; }
+.kb-item:hover { background: var(--color-bg-hover); }
+.kb-item.active { background: var(--color-bg-active); }
+.kb-item-name { font-weight: 600; font-size: 14px; }
+.kb-item-time { font-size: 11px; color: var(--color-text-light); float: right; }
+#kb-new-btn { display: block; width: calc(100% - 32px); margin: var(--space-md) var(--space-lg); padding: 10px; background: var(--color-bg-card); border: 1px dashed var(--color-border-muted); border-radius: var(--radius-md); font-size: 13px; cursor: pointer; color: var(--color-text-secondary); text-align: center; }
+#kb-new-btn:hover { background: var(--color-bg-hover-subtle); border-color: var(--color-text-light); }
+
+/* Knowledge editor (main area) */
+#kb-editor { display: none; flex: 1; flex-direction: column; }
+#kb-editor-header { padding: var(--space-lg); border-bottom: 1px solid var(--color-border); background: var(--color-bg-card); display: flex; align-items: center; gap: var(--space-md); }
+#kb-editor-name { font-weight: 600; font-size: 16px; flex: 1; }
+#kb-editor-actions { display: flex; gap: var(--space-sm); }
+#kb-editor-actions button { padding: 6px 14px; border-radius: var(--radius-input); font-size: 13px; cursor: pointer; border: 1px solid var(--color-border); background: var(--color-bg-card); }
+#kb-save-btn { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; font-weight: 600; }
+#kb-save-btn:hover { background: var(--color-primary-hover) !important; }
+#kb-delete-btn { color: var(--color-danger-text); }
+#kb-delete-btn:hover { background: var(--color-bg-delete-hover); }
+#kb-editor-body { flex: 1; padding: var(--space-lg); overflow: hidden; display: flex; }
+#kb-editor-textarea { width: 100%; height: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 14px; font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: none; }
+
+/* Knowledge new doc form */
+#kb-new-form { display: none; flex: 1; flex-direction: column; }
+#kb-new-header { padding: var(--space-lg); border-bottom: 1px solid var(--color-border); background: var(--color-bg-card); display: flex; align-items: center; gap: var(--space-md); }
+#kb-new-name-input { flex: 1; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-input); font-size: 14px; font-family: inherit; }
+#kb-new-actions { display: flex; gap: var(--space-sm); }
+#kb-new-actions button { padding: 6px 14px; border-radius: var(--radius-input); font-size: 13px; cursor: pointer; border: 1px solid var(--color-border); background: var(--color-bg-card); }
+#kb-create-btn { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; font-weight: 600; }
+#kb-cancel-btn { color: var(--color-text-secondary); }
+#kb-new-body { flex: 1; padding: var(--space-lg); overflow: hidden; display: flex; }
+#kb-new-textarea { width: 100%; height: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 14px; font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: none; }

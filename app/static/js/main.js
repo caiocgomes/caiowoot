@@ -1,0 +1,206 @@
+import state from './state.js';
+import { connectWS, on as wsOn } from './ws.js';
+import { notifyInbound, updateTitleBadge, initNotificationButton, setOpenConversation } from './notifications.js';
+
+import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar } from './ui/conversations.js';
+import { appendMessage } from './ui/messages.js';
+import { showDrafts, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
+import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
+import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
+import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
+import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, hideReviewDetail, reviewGoBack, validateAnnotation, rejectAnnotation, showPromoteModal, closePromoteModal, confirmPromote, afterReviewAction, loadRules, renderRulesList, openRuleDetail, hideRuleDetail, toggleRule, saveRule, cancelRuleEdit } from './ui/review.js';
+import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm, createCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
+import { openSettings, closeSettings, switchSettingsTab, loadSettingsPrompts, loadSettingsProfile, renderSettingsTab, saveSettings, resetPrompt } from './ui/settings.js';
+import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFunnelStage } from './ui/context-panel.js';
+
+// Wire up notification's openConversation reference
+setOpenConversation(openConversation);
+
+// --- switchTab (replaces the original monolithic switchTab) ---
+function switchTab(tab) {
+  state.currentTab = tab;
+  document.querySelectorAll(".sidebar-tab").forEach(t => {
+    t.classList.toggle("active", t.dataset.tab === tab);
+  });
+
+  const convList = document.getElementById("conversation-list");
+  const kbList = document.getElementById("knowledge-list");
+  const reviewList = document.getElementById("review-list");
+  const campaignList = document.getElementById("campaign-list");
+
+  // Hide all sidebar panels
+  convList.style.display = "none";
+  kbList.style.display = "none";
+  reviewList.style.display = "none";
+  campaignList.style.display = "none";
+
+  // Hide all main panels
+  document.getElementById("chat-wrapper").style.display = "none";
+  document.getElementById("main-empty").style.display = "none";
+  document.getElementById("kb-editor").style.display = "none";
+  document.getElementById("kb-new-form").style.display = "none";
+  hideReviewDetail();
+  hideRuleDetail();
+  hideCampaignPanels();
+
+  if (tab === "conversations") {
+    convList.style.display = "block";
+    if (state.currentConversationId) {
+      document.getElementById("chat-wrapper").style.display = "flex";
+    } else {
+      document.getElementById("main-empty").style.display = "flex";
+      document.getElementById("main-empty").textContent = "Selecione uma conversa";
+    }
+  } else if (tab === "knowledge") {
+    kbList.style.display = "block";
+    loadKnowledgeDocs();
+  } else if (tab === "review") {
+    reviewList.style.display = "block";
+    document.getElementById("main-empty").style.display = "flex";
+    document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
+    loadReviewItems();
+    loadRules();
+  } else if (tab === "campaigns") {
+    campaignList.style.display = "block";
+    document.getElementById("main-empty").style.display = "flex";
+    document.getElementById("main-empty").textContent = "Selecione ou crie uma campanha";
+    loadCampaigns();
+  }
+}
+
+// --- WebSocket event handlers ---
+wsOn("new_message", (data) => {
+  if (data.message.direction === "inbound") {
+    notifyInbound(data.conversation_id, data.message.content);
+  }
+  loadConversations();
+  if (data.conversation_id === state.currentConversationId) {
+    appendMessage(data.message);
+    if (data.message.direction === "inbound") {
+      state.lastTriggerMessageId = data.message.id;
+    }
+  }
+});
+
+wsOn("drafts_ready", (data) => {
+  console.log("drafts_ready received, drafts count:", data.drafts?.length, "match:", data.conversation_id === state.currentConversationId);
+  if (data.conversation_id === state.currentConversationId) {
+    showDrafts(data.drafts, data.draft_group_id);
+    // Update context panel with AI classification
+    if (data.funnel_product != null || data.funnel_stage != null || data.situation_summary != null) {
+      renderContextPanel(
+        { funnel_product: data.funnel_product, funnel_stage: data.funnel_stage },
+        data.situation_summary,
+      );
+    }
+  }
+  loadConversations();
+});
+
+wsOn("message_sent", (data) => {
+  if (data.conversation_id === state.currentConversationId) {
+    appendMessage(data.message);
+  }
+  loadConversations();
+});
+
+wsOn("scheduled_send_created", (data) => {
+  if (data.conversation_id === state.currentConversationId) {
+    addScheduledPill(data.scheduled_send);
+  }
+  loadConversations();
+});
+
+wsOn("scheduled_send_cancelled", (data) => {
+  if (data.conversation_id === state.currentConversationId) {
+    removeScheduledPill(data.scheduled_send_id);
+  }
+  loadConversations();
+});
+
+wsOn("scheduled_send_completed", (data) => {
+  if (data.conversation_id === state.currentConversationId) {
+    removeScheduledPill(data.scheduled_send_id);
+  }
+  loadConversations();
+});
+
+wsOn("campaign_progress", (data) => {
+  if (state.currentTab === "campaigns" && state.currentCampaignId === data.campaign_id) {
+    openCampaignDetail(data.campaign_id);
+  }
+  if (state.currentTab === "campaigns") {
+    loadCampaigns();
+  }
+});
+
+wsOn("campaign_status", (data) => {
+  if (state.currentTab === "campaigns" && state.currentCampaignId === data.campaign_id) {
+    openCampaignDetail(data.campaign_id);
+  }
+  if (state.currentTab === "campaigns") {
+    loadCampaigns();
+  }
+});
+
+// --- Visibility change ---
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+      connectWS();
+    }
+    state.unreadCount = 0;
+    updateTitleBadge();
+    loadConversations();
+  }
+});
+
+// --- Init ---
+initCompose();
+initScheduleUI();
+initNotificationButton();
+loadConversations();
+loadQuickAttachButtons();
+connectWS();
+
+// --- Expose functions to window for onclick handlers in HTML ---
+window.switchTab = switchTab;
+window.openConversation = openConversation;
+window.closeSidebar = closeSidebar;
+window.toggleSidebar = toggleSidebar;
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
+window.switchSettingsTab = switchSettingsTab;
+window.saveSettings = saveSettings;
+window.resetPrompt = resetPrompt;
+window.openDoc = openDoc;
+window.saveDoc = saveDoc;
+window.deleteDoc = deleteDoc;
+window.showNewDocForm = showNewDocForm;
+window.cancelNewDoc = cancelNewDoc;
+window.createDoc = createDoc;
+window.openReviewItem = openReviewItem;
+window.reviewGoBack = reviewGoBack;
+window.validateAnnotation = validateAnnotation;
+window.rejectAnnotation = rejectAnnotation;
+window.showPromoteModal = showPromoteModal;
+window.closePromoteModal = closePromoteModal;
+window.confirmPromote = confirmPromote;
+window.toggleRule = toggleRule;
+window.saveRule = saveRule;
+window.cancelRuleEdit = cancelRuleEdit;
+window.showCampaignForm = showCampaignForm;
+window.cancelCampaignForm = cancelCampaignForm;
+window.createCampaign = createCampaign;
+window.openCampaignDetail = openCampaignDetail;
+window.generateVariations = generateVariations;
+window.editVariation = editVariation;
+window.startCampaign = startCampaign;
+window.pauseCampaign = pauseCampaign;
+window.resumeCampaign = resumeCampaign;
+window.retryCampaign = retryCampaign;
+window.cancelScheduledSend = cancelScheduledSend;
+window.classifyConversation = classifyConversation;
+window.updateFunnelProduct = updateFunnelProduct;
+window.updateFunnelStage = updateFunnelStage;
+window.loadSuggestedAttachment = loadSuggestedAttachment;

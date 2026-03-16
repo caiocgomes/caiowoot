@@ -1,0 +1,86 @@
+/* Compose area, draft cards, instruction bar, attachment, buttons */
+
+#compose { padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--color-border); background: var(--color-bg-card); }
+
+/* Draft variations */
+#draft-cards { display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.draft-card { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px; font-size: 13px; background: var(--color-bg-subtle); cursor: pointer; position: relative; max-height: 120px; overflow-y: auto; line-height: 1.4; }
+.draft-card:hover { border-color: var(--color-text-light); }
+.draft-card.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.draft-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.draft-card-label { font-size: 11px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; }
+.draft-card-actions { display: flex; gap: var(--space-xs); }
+.draft-card-actions button { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px var(--space-xs); border-radius: var(--radius-sm); }
+.draft-card-actions button:hover { background: var(--color-border-light); }
+.draft-card-text { font-size: 13px; color: var(--color-text); white-space: pre-wrap; }
+.draft-attachment-suggestion { display: flex; align-items: center; gap: var(--space-sm); margin-top: 6px; padding: var(--space-xs) var(--space-sm); background: var(--color-info-light); border-radius: var(--radius-sm); font-size: 12px; color: var(--color-info); }
+.draft-attach-btn { padding: 2px var(--space-sm); background: var(--color-info); color: var(--color-bg-card); border: none; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; font-weight: 600; }
+.draft-attach-btn:hover { background: var(--color-info-hover); }
+#regen-all-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); cursor: pointer; font-size: 12px; white-space: nowrap; align-self: center; }
+#regen-all-btn:hover { background: var(--color-bg-hover); }
+#draft-cards-container { display: none; }
+.draft-cards-row { display: flex; gap: var(--space-sm); align-items: stretch; }
+
+/* Instruction bar */
+#instruction-bar { margin-bottom: var(--space-sm); }
+#instruction-bar .instruction-row { display: flex; gap: var(--space-sm); align-items: center; }
+#instruction-input { flex: 1; padding: var(--space-sm) var(--space-md); border: 1px dashed var(--color-border-muted); border-radius: var(--radius-input); font-size: 13px; font-family: inherit; background: var(--color-bg-input); }
+#instruction-input::placeholder { color: var(--color-text-placeholder); }
+#regen-instruction-btn { padding: var(--space-sm) 14px; background: var(--color-bg-card); border: 1px solid var(--color-border-muted); border-radius: var(--radius-input); font-size: 13px; cursor: pointer; white-space: nowrap; color: var(--color-text-dim); }
+#regen-instruction-btn:hover { background: var(--color-bg-hover); border-color: var(--color-text-light); }
+
+/* Justification */
+#justification { font-size: 12px; color: var(--color-text-muted); padding: var(--space-sm) var(--space-md); background: var(--color-bg-muted); border-radius: var(--radius-input); margin-bottom: var(--space-sm); font-style: italic; display: none; }
+
+/* Draft area */
+#draft-area { display: flex; gap: var(--space-sm); align-items: flex-end; }
+#draft-input-wrapper { flex: 1; position: relative; }
+#draft-input { width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; resize: vertical; min-height: 200px; max-height: 500px; }
+#clear-draft-btn { display: none; position: absolute; top: 6px; right: 6px; min-width: 44px; min-height: 44px; width: 32px; height: 32px; padding: 0; background: #e0e0e0; border: none; border-radius: var(--radius-round); font-size: 18px; line-height: 1; color: var(--color-text-dim); cursor: pointer; z-index: 2; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+#clear-draft-btn:hover { background: var(--color-bg-disabled); color: var(--color-text); }
+
+/* Attachment */
+#attachment-bar { display: none; margin-bottom: var(--space-sm); padding: 6px 10px; background: var(--color-bg-hover); border-radius: var(--radius-input); font-size: 13px; }
+#attachment-bar span { margin-right: var(--space-sm); }
+#attachment-remove { background: none; border: none; cursor: pointer; color: var(--color-danger-text); font-weight: 600; }
+
+/* Quick-attach buttons */
+#quick-attach { display: none; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+#quick-attach.visible { display: flex; }
+.quick-attach-btn { padding: var(--space-xs) 10px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 14px; font-size: 12px; cursor: pointer; color: var(--color-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.quick-attach-btn:hover { background: var(--color-info-light); border-color: var(--color-info-subtle); color: var(--color-info); }
+
+/* Button group */
+#btn-group { display: flex; flex-direction: column; gap: var(--space-xs); }
+#send-btn { padding: 10px var(--space-xxl); background: var(--color-primary); color: var(--color-bg-card); border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; }
+#send-btn:hover { background: var(--color-primary-hover); }
+#send-btn:disabled { background: var(--color-bg-disabled); cursor: not-allowed; }
+#rewrite-btn { padding: var(--space-sm) var(--space-md); background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; color: var(--color-text-dim); }
+#rewrite-btn:hover { background: var(--color-bg-hover); }
+#rewrite-btn:disabled { color: var(--color-text-placeholder); cursor: not-allowed; }
+#attach-btn { padding: var(--space-sm) var(--space-md); background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 16px; cursor: pointer; }
+#attach-btn:hover { background: var(--color-bg-hover); }
+#attach-file { display: none; }
+
+/* Schedule button and dropdown */
+#schedule-wrapper { position: relative; }
+#schedule-btn { padding: 10px var(--space-md); background: var(--color-bg-card); border: 1px solid var(--color-primary); border-radius: var(--radius-md); font-size: 13px; font-weight: 600; cursor: pointer; color: var(--color-primary); white-space: nowrap; }
+#schedule-btn:hover { background: var(--color-primary-light); }
+#schedule-dropdown { display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: var(--space-xs); background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-dropdown); z-index: 50; min-width: 200px; overflow: hidden; }
+#schedule-dropdown.open { display: block; }
+.schedule-option { padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--color-bg-hover); }
+.schedule-option:last-child { border-bottom: none; }
+.schedule-option:hover { background: var(--color-primary-light); }
+#schedule-custom-row { display: none; padding: 10px 14px; border-top: 1px solid var(--color-border-light); }
+#schedule-custom-row input { width: 100%; padding: 6px var(--space-sm); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 13px; font-family: inherit; }
+#schedule-custom-row button { margin-top: 6px; padding: 6px var(--space-md); background: var(--color-primary); color: var(--color-bg-card); border: none; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; font-weight: 600; width: 100%; }
+
+/* Scheduled send pills */
+.scheduled-pill { background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-sm); font-size: 13px; display: flex; align-items: center; gap: var(--space-sm); }
+.scheduled-pill-icon { font-size: 16px; flex-shrink: 0; }
+.scheduled-pill-info { flex: 1; min-width: 0; }
+.scheduled-pill-time { font-weight: 600; color: var(--color-warning); font-size: 12px; }
+.scheduled-pill-preview { color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.scheduled-pill-cancel { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-sm); font-size: 11px; cursor: pointer; color: var(--color-danger-text); flex-shrink: 0; }
+.scheduled-pill-cancel:hover { background: var(--color-bg-delete-hover); }
+#scheduled-pills { margin-bottom: 0; }

@@ -1,0 +1,33 @@
+/* Sidebar, tabs, conversation list, notification dot */
+
+#sidebar { width: 320px; background: var(--color-bg-card); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; }
+#sidebar-header { padding: var(--space-lg); border-bottom: 1px solid var(--color-border); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+.notif-btn { display: none; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-input); padding: var(--space-xs) 10px; font-size: 12px; cursor: pointer; color: var(--color-text-dim); margin-left: auto; margin-right: var(--space-sm); }
+#conversation-list { flex: 1; overflow-y: auto; }
+
+/* Conversation items */
+.conv-item { padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--color-border-light); cursor: pointer; }
+.conv-item:hover { background: var(--color-bg-hover); }
+.conv-item.active { background: var(--color-bg-active); }
+.conv-item.is-new .conv-name,
+.conv-item.needs-reply .conv-name { font-weight: 700; }
+.conv-new-dot { display: inline-block; width: 8px; height: 8px; background: var(--color-primary); border-radius: var(--radius-round); margin-right: 6px; vertical-align: middle; }
+.conv-name { font-weight: 400; font-size: 14px; }
+.conv-preview { font-size: 13px; color: var(--color-text-secondary); margin-top: var(--space-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-time { font-size: 11px; color: var(--color-text-light); float: right; }
+.conv-responder { font-size: 11px; color: var(--color-primary); margin-top: 2px; font-weight: 500; }
+
+/* Clock icon for conversation list */
+.conv-clock { font-size: 12px; margin-left: var(--space-xs); vertical-align: middle; }
+
+/* Sidebar tabs */
+#sidebar-tabs { display: flex; border-bottom: 1px solid var(--color-border); }
+.sidebar-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--color-bg-card); border: none; border-bottom: 2px solid transparent; color: var(--color-text-muted); }
+.sidebar-tab.active { color: var(--color-text); border-bottom-color: var(--color-primary); }
+.sidebar-tab:hover { background: var(--color-bg-hover-subtle); }
+
+/* Hamburger button - hidden on desktop */
+#hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: var(--space-xs) var(--space-sm); margin-right: var(--space-sm); }
+
+/* Sidebar backdrop */
+#sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-bg-overlay); z-index: 99; }

@@ -1,0 +1,92 @@
+/* Design Tokens */
+:root {
+  /* Colors - Primary */
+  --color-primary: #25D366;
+  --color-primary-hover: #1da851;
+  --color-primary-light: #f0faf0;
+
+  /* Colors - Danger */
+  --color-danger: #c62828;
+  --color-danger-light: #ffebee;
+  --color-danger-border: #ffcdd2;
+  --color-danger-text: #c00;
+
+  /* Colors - Warning */
+  --color-warning: #f57f17;
+  --color-warning-bg: #fffde7;
+  --color-warning-border: #fff9c4;
+
+  /* Colors - Info */
+  --color-info: #1565c0;
+  --color-info-light: #e3f2fd;
+  --color-info-border: #bbdefb;
+  --color-info-hover: #0d47a1;
+  --color-info-subtle: #90caf9;
+
+  /* Colors - Success */
+  --color-success: #2e7d32;
+  --color-bg-success: #e8f5e9;
+  --color-bg-success-dark: #c8e6c9;
+
+  /* Colors - Text */
+  --color-text: #333;
+  --color-text-secondary: #666;
+  --color-text-muted: #888;
+  --color-text-light: #999;
+  --color-text-dim: #555;
+  --color-text-faint: #bbb;
+  --color-text-placeholder: #bbb;
+
+  /* Colors - Borders */
+  --color-border: #ddd;
+  --color-border-light: #eee;
+  --color-border-muted: #ccc;
+
+  /* Colors - Backgrounds */
+  --color-bg: #f5f5f5;
+  --color-bg-card: #fff;
+  --color-bg-hover: #f0f0f0;
+  --color-bg-active: #e3f2fd;
+  --color-bg-subtle: #fafafa;
+  --color-bg-input: #fffef5;
+  --color-bg-muted: #f9f9f9;
+  --color-bg-separator: #e8e8e8;
+  --color-bg-disabled: #ccc;
+  --color-bg-overlay: rgba(0, 0, 0, 0.4);
+  --color-bg-hover-subtle: #f8f8f8;
+  --color-bg-delete-hover: #fee;
+
+  /* Colors - Messages */
+  --color-msg-outbound: #dcf8c6;
+  --color-msg-outbound-time: #7cb381;
+
+  /* Colors - Review badges */
+  --color-badge-edited-bg: #fff3e0;
+  --color-badge-edited-text: #e65100;
+  --color-badge-confirmed-bg: #e8f5e9;
+  --color-badge-confirmed-text: #2e7d32;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 20px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 20px;
+  --radius-round: 50%;
+  --radius-input: 6px;
+
+  /* Font */
+  --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Shadows */
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.15);
+  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-sidebar: 2px 0 12px rgba(0, 0, 0, 0.2);
+}
