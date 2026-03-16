@@ -192,9 +192,9 @@ async def auto_qualify_respond(conversation_id: int):
 
                 # Persist summary in drafts table so GET /conversations/{id} can find it
                 await db.execute(
-                    """INSERT INTO drafts (conversation_id, draft_text, situation_summary, variation_index, approach)
-                       VALUES (?, '', ?, 0, 'qualifying')""",
-                    (conversation_id, summary_result.get("summary", "")),
+                    """INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, situation_summary, variation_index, approach)
+                       VALUES (?, ?, '', ?, 0, 'qualifying')""",
+                    (conversation_id, msg_id, summary_result.get("summary", "")),
                 )
 
                 # Update funnel data if the summary provided product/stage

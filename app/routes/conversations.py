@@ -199,7 +199,22 @@ async def classify_conversation(conversation_id: int, db: aiosqlite.Connection =
                 f"UPDATE conversations SET {', '.join(updates)} WHERE id = ?",
                 params,
             )
-            await db.commit()
+
+        # Persist summary so GET /conversations/{id} can find it
+        if result.get("summary"):
+            last_msg = await db.execute(
+                "SELECT id FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1",
+                (conversation_id,),
+            )
+            last = await last_msg.fetchone()
+            if last:
+                await db.execute(
+                    """INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, situation_summary, variation_index, approach)
+                       VALUES (?, ?, '', ?, 0, 'classify')""",
+                    (conversation_id, last["id"], result["summary"]),
+                )
+
+        await db.commit()
 
         return {
             "summary": result["summary"],
