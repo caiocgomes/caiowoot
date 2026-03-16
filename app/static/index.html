@@ -174,9 +174,18 @@
           <input id="campaign-max-interval" type="number" value="180" min="10" class="campaign-form-input">
         </div>
       </div>
+      <div id="campaign-form-generate-section" class="campaign-form-field">
+        <button id="campaign-generate-btn" onclick="generateFormVariations()" class="campaign-btn-generate">Gerar variações da mensagem</button>
+        <div id="campaign-form-generating" class="campaign-form-loading" style="display:none;">Gerando variações com IA...</div>
+      </div>
+      <div id="campaign-form-variations" style="display:none;">
+        <label class="campaign-form-label">Variações (marque as que quer usar)</label>
+        <div id="campaign-form-var-list"></div>
+        <button id="campaign-regenerate-btn" onclick="generateFormVariations()" class="campaign-btn-regenerate">Regenerar variações</button>
+      </div>
       <div class="campaign-form-actions">
         <button onclick="cancelCampaignForm()" class="campaign-btn-cancel">Cancelar</button>
-        <button onclick="createCampaign()" class="campaign-btn-create">Criar campanha</button>
+        <button id="campaign-start-btn" onclick="createAndStartCampaign()" class="campaign-btn-create" style="display:none;">Criar e iniciar</button>
       </div>
     </div>
   </div>

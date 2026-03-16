@@ -9,7 +9,7 @@ import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachme
 import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
 import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
 import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, hideReviewDetail, reviewGoBack, validateAnnotation, rejectAnnotation, showPromoteModal, closePromoteModal, confirmPromote, afterReviewAction, loadRules, renderRulesList, openRuleDetail, hideRuleDetail, toggleRule, saveRule, cancelRuleEdit } from './ui/review.js';
-import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm, createCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
+import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm, createCampaign, generateFormVariations, editFormVariation, createAndStartCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
 import { openSettings, closeSettings, switchSettingsTab, loadSettingsPrompts, loadSettingsProfile, renderSettingsTab, saveSettings, resetPrompt } from './ui/settings.js';
 import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFunnelStage } from './ui/context-panel.js';
 
@@ -241,6 +241,9 @@ window.cancelRuleEdit = cancelRuleEdit;
 window.showCampaignForm = showCampaignForm;
 window.cancelCampaignForm = cancelCampaignForm;
 window.createCampaign = createCampaign;
+window.generateFormVariations = generateFormVariations;
+window.editFormVariation = editFormVariation;
+window.createAndStartCampaign = createAndStartCampaign;
 window.openCampaignDetail = openCampaignDetail;
 window.generateVariations = generateVariations;
 window.editVariation = editVariation;

@@ -16,8 +16,12 @@ export function hideCampaignPanels() {
   document.getElementById("campaign-detail").style.display = "none";
 }
 
+// Track the draft campaign ID created during form flow
+let formCampaignId = null;
+
 export function showCampaignForm() {
   hideCampaignPanels();
+  formCampaignId = null;
   document.getElementById("main-empty").style.display = "none";
   document.getElementById("campaign-form").style.display = "flex";
   document.getElementById("campaign-name-input").value = "";
@@ -26,15 +30,24 @@ export function showCampaignForm() {
   document.getElementById("campaign-img-input").value = "";
   document.getElementById("campaign-min-interval").value = "60";
   document.getElementById("campaign-max-interval").value = "180";
+  // Reset variation section
+  document.getElementById("campaign-form-variations").style.display = "none";
+  document.getElementById("campaign-form-var-list").innerHTML = "";
+  document.getElementById("campaign-form-generating").style.display = "none";
+  document.getElementById("campaign-generate-btn").style.display = "";
+  document.getElementById("campaign-start-btn").style.display = "none";
 }
 
 export function cancelCampaignForm() {
+  formCampaignId = null;
   hideCampaignPanels();
   document.getElementById("main-empty").style.display = "flex";
   document.getElementById("main-empty").textContent = "Selecione ou crie uma campanha";
 }
 
-export async function createCampaign() {
+async function ensureCampaignCreated() {
+  if (formCampaignId) return formCampaignId;
+
   const name = document.getElementById("campaign-name-input").value.trim();
   const baseMessage = document.getElementById("campaign-msg-input").value.trim();
   const csvInput = document.getElementById("campaign-csv-input");
@@ -43,8 +56,8 @@ export async function createCampaign() {
   const maxInterval = document.getElementById("campaign-max-interval").value;
 
   if (!name || !baseMessage || !csvInput.files.length) {
-    showToast("Preencha nome, mensagem e selecione o CSV.", 'error');
-    return;
+    showToast("Preencha nome, mensagem e selecione o CSV antes de gerar variações.", 'error');
+    return null;
   }
 
   const formData = new FormData();
@@ -61,11 +74,124 @@ export async function createCampaign() {
   if (!res.ok) {
     const err = await res.json();
     showToast(err.detail || "Erro ao criar campanha", 'error');
-    return;
+    return null;
   }
   const data = await res.json();
+  formCampaignId = data.campaign.id;
   await loadCampaigns();
-  openCampaignDetail(data.campaign.id);
+  return formCampaignId;
+}
+
+export async function generateFormVariations() {
+  const genBtn = document.getElementById("campaign-generate-btn");
+  const regenBtn = document.getElementById("campaign-regenerate-btn");
+  const loading = document.getElementById("campaign-form-generating");
+
+  // Create campaign in DB first (if not yet)
+  genBtn.disabled = true;
+  if (regenBtn) regenBtn.disabled = true;
+
+  const campaignId = await ensureCampaignCreated();
+  if (!campaignId) {
+    genBtn.disabled = false;
+    if (regenBtn) regenBtn.disabled = false;
+    return;
+  }
+
+  // Show loading, hide generate button
+  genBtn.style.display = "none";
+  loading.style.display = "block";
+
+  const res = await generateVariationsApi(campaignId);
+  loading.style.display = "none";
+
+  if (!res.ok) {
+    genBtn.style.display = "";
+    genBtn.disabled = false;
+    const err = await res.json();
+    showToast(err.detail || "Erro ao gerar variações", 'error');
+    return;
+  }
+
+  // Fetch the campaign detail to get variations
+  const detailRes = await getCampaign(campaignId);
+  const data = await detailRes.json();
+
+  // Render variations inline in the form
+  const varSection = document.getElementById("campaign-form-variations");
+  const varList = document.getElementById("campaign-form-var-list");
+  varList.innerHTML = "";
+
+  for (const v of data.variations) {
+    const vDiv = document.createElement("div");
+    const isActive = v.is_active !== 0;
+    vDiv.className = "campaign-variation" + (isActive ? "" : " inactive");
+    const label = v.variation_index === -1 ? "Original" : `v${v.variation_index + 1}`;
+    vDiv.innerHTML = `
+      <label class="campaign-variation-toggle">
+        <input type="checkbox" ${isActive ? "checked" : ""} data-variation-id="${v.id}">
+      </label>
+      <span class="campaign-variation-label">${label}</span>
+      <button onclick="editFormVariation(${campaignId}, ${v.variation_index}, this)" class="campaign-variation-edit-inline">\u270E</button>
+      <div class="campaign-variation-body">${escapeHtml(v.variation_text)}</div>
+    `;
+    const checkbox = vDiv.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', async () => {
+      const toggleRes = await toggleVariationApi(campaignId, v.id);
+      if (!toggleRes.ok) {
+        const err = await toggleRes.json();
+        showToast(err.detail || "Erro ao alterar variação", 'error');
+        checkbox.checked = !checkbox.checked;
+        return;
+      }
+      const result = await toggleRes.json();
+      vDiv.classList.toggle("inactive", !result.is_active);
+    });
+    varList.appendChild(vDiv);
+  }
+
+  varSection.style.display = "block";
+  document.getElementById("campaign-start-btn").style.display = "";
+  if (regenBtn) regenBtn.disabled = false;
+}
+
+export async function editFormVariation(campaignId, variationIdx, btnEl) {
+  // Reuse the existing editVariation logic
+  return editVariation(campaignId, variationIdx, btnEl);
+}
+
+export async function createAndStartCampaign() {
+  if (!formCampaignId) {
+    showToast("Gere as variações primeiro.", 'error');
+    return;
+  }
+
+  const btn = document.getElementById("campaign-start-btn");
+  btn.disabled = true;
+  btn.textContent = "Iniciando...";
+
+  const res = await startCampaignApi(formCampaignId);
+  if (!res.ok) {
+    const err = await res.json();
+    showToast(err.detail || "Erro ao iniciar campanha", 'error');
+    btn.disabled = false;
+    btn.textContent = "Criar e iniciar";
+    return;
+  }
+
+  showToast("Campanha iniciada!", "success");
+  await loadCampaigns();
+  openCampaignDetail(formCampaignId);
+  formCampaignId = null;
+}
+
+// Legacy createCampaign kept for backward compat (not used in new flow)
+export async function createCampaign() {
+  await ensureCampaignCreated();
+  if (formCampaignId) {
+    await loadCampaigns();
+    openCampaignDetail(formCampaignId);
+  }
 }
 
 export async function loadCampaigns() {
