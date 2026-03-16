@@ -2,7 +2,7 @@ import state from '../state.js';
 import { escapeHtml } from '../utils.js';
 import {
   getCampaigns, getCampaign, createCampaignApi,
-  generateVariationsApi, editVariationApi,
+  generateVariationsApi, editVariationApi, toggleVariationApi,
   startCampaignApi, pauseCampaignApi, resumeCampaignApi, retryCampaignApi
 } from '../api.js';
 import { showToast, showConfirm } from './toast.js';
@@ -142,18 +142,36 @@ export async function openCampaignDetail(id) {
     genBtn.addEventListener('click', () => generateVariations(id, genBtn));
   }
 
-  // Variations (Task 4.4: use CSS classes)
+  // Variations with active/inactive toggle
   const varList = document.getElementById("campaign-variations-list");
   varList.innerHTML = "";
   for (const v of data.variations) {
     const vDiv = document.createElement("div");
-    vDiv.className = "campaign-variation";
+    const isActive = v.is_active !== 0;
+    vDiv.className = "campaign-variation" + (isActive ? "" : " inactive");
+    const label = v.variation_index === -1 ? "Original" : `v${v.variation_index + 1}`;
     vDiv.innerHTML = `
-      <span class="campaign-variation-label">v${v.variation_index + 1}</span>
+      <label class="campaign-variation-toggle">
+        <input type="checkbox" ${isActive ? "checked" : ""} data-variation-id="${v.id}" data-campaign-id="${id}">
+      </label>
+      <span class="campaign-variation-label">${label}</span>
       <span class="campaign-variation-usage">(${v.usage_count}x usado)</span>
       ${data.status === "draft" ? `<button onclick="editVariation(${id}, ${v.variation_index}, this)" class="campaign-variation-edit-inline">\u270E</button>` : ""}
       <div class="campaign-variation-body">${escapeHtml(v.variation_text)}</div>
     `;
+    // Wire up checkbox
+    const checkbox = vDiv.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', async () => {
+      const res = await toggleVariationApi(id, v.id);
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Erro ao alterar variação", 'error');
+        checkbox.checked = !checkbox.checked; // revert
+        return;
+      }
+      const result = await res.json();
+      vDiv.classList.toggle("inactive", !result.is_active);
+    });
     varList.appendChild(vDiv);
   }
 

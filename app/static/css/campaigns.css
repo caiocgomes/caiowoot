@@ -12,6 +12,8 @@
 
 .campaign-form-field { }
 .campaign-form-label { font-size: 13px; font-weight: 600; color: var(--color-text-dim); display: block; margin-bottom: 6px; }
+.campaign-csv-template-link { font-weight: 400; color: var(--color-info); text-decoration: none; }
+.campaign-csv-template-link:hover { text-decoration: underline; }
 
 .campaign-form-row { display: flex; gap: var(--space-lg); }
 .campaign-form-row > * { flex: 1; }
@@ -45,7 +47,7 @@
 /* Campaign variations */
 .campaign-variations-section { margin-bottom: var(--space-lg); }
 .campaign-section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-sm); }
-.campaign-variation { border: 1px solid var(--color-border-light); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm); }
+.campaign-variation { border: 1px solid var(--color-border-light); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-sm); position: relative; }
 .campaign-variation-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-sm); }
 .campaign-variation-header span { font-size: 13px; font-weight: 600; color: var(--color-text-dim); }
 .campaign-variation-edit-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px var(--space-sm); font-size: 11px; cursor: pointer; color: var(--color-text-muted); }
@@ -83,6 +85,10 @@
 .campaign-action-btn.secondary:hover { background: var(--color-bg-hover); }
 
 /* Variation inline items */
+.campaign-variation-toggle { flex-shrink: 0; display: flex; align-items: center; }
+.campaign-variation-toggle input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--color-primary); }
+.campaign-variation.inactive { opacity: 0.45; }
+.campaign-variation.inactive .campaign-variation-body { text-decoration: line-through; }
 .campaign-variation-label { font-size: 11px; font-weight: 600; color: #888; }
 .campaign-variation-usage { font-size: 11px; color: #bbb; margin-left: 8px; }
 .campaign-variation-edit-inline { position: absolute; top: 6px; right: 6px; background: none; border: none; cursor: pointer; font-size: 12px; color: #888; }

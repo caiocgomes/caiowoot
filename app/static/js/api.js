@@ -216,6 +216,10 @@ export async function editVariationApi(campaignId, variationIdx, text) {
   });
 }
 
+export async function toggleVariationApi(campaignId, variationId) {
+  return request(`/campaigns/${campaignId}/variations/${variationId}/toggle`, { method: "PATCH" });
+}
+
 export async function startCampaignApi(id) {
   return request(`/campaigns/${id}/start`, { method: "POST" });
 }

@@ -40,7 +40,7 @@ async def _pick_variation(db, campaign_id: int, exclude_variation_id: int | None
 
     row = await db.execute(
         f"""SELECT id, variation_text FROM campaign_variations
-            WHERE campaign_id = ? {exclude_clause}
+            WHERE campaign_id = ? AND is_active = 1 {exclude_clause}
             ORDER BY usage_count ASC, RANDOM()
             LIMIT 1""",
         params,

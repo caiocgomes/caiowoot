@@ -8,6 +8,8 @@ import aiosqlite
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from fastapi.responses import PlainTextResponse
+
 from app.config import settings
 from app.database import get_db_connection
 from app.services.campaign_variations import generate_variations
@@ -15,6 +17,17 @@ from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.get("/campaigns/csv-template")
+async def download_csv_template():
+    """Download a CSV template for campaign contacts."""
+    content = "telefone,nome\n5511999999999,João Silva\n5511888888888,Maria Santos\n"
+    return PlainTextResponse(
+        content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=contatos-template.csv"},
+    )
 
 
 @router.post("/campaigns")
@@ -135,7 +148,7 @@ async def get_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_
     contacts = await contacts_rows.fetchall()
 
     variations_rows = await db.execute(
-        """SELECT id, variation_index, variation_text, usage_count
+        """SELECT id, variation_index, variation_text, usage_count, is_active
            FROM campaign_variations
            WHERE campaign_id = ?
            ORDER BY variation_index""",
@@ -173,12 +186,19 @@ async def generate_campaign_variations(campaign_id: int, db: aiosqlite.Connectio
     if campaign["status"] != "draft":
         raise HTTPException(status_code=409, detail="Campaign must be in draft status")
 
-    # Delete existing variations
+    # Delete existing variations (except base message at index -1)
     await db.execute(
         "DELETE FROM campaign_variations WHERE campaign_id = ?",
         (campaign_id,),
     )
 
+    # Insert base message as variation index -1 (original)
+    await db.execute(
+        "INSERT INTO campaign_variations (campaign_id, variation_index, variation_text) VALUES (?, ?, ?)",
+        (campaign_id, -1, campaign["base_message"]),
+    )
+
+    # Generate 8 variations via Claude
     variations = await generate_variations(campaign["base_message"])
 
     for i, text in enumerate(variations):
@@ -189,7 +209,7 @@ async def generate_campaign_variations(campaign_id: int, db: aiosqlite.Connectio
 
     await db.commit()
 
-    return {"status": "ok", "count": len(variations)}
+    return {"status": "ok", "count": len(variations) + 1}
 
 
 class VariationUpdate(BaseModel):
@@ -217,6 +237,37 @@ async def regenerate_variations(campaign_id: int, db: aiosqlite.Connection = Dep
     return await generate_campaign_variations(campaign_id, db)
 
 
+@router.patch("/campaigns/{campaign_id}/variations/{variation_id}/toggle")
+async def toggle_variation(campaign_id: int, variation_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
+    """Toggle a variation's active state."""
+    row = await db.execute(
+        "SELECT id, is_active FROM campaign_variations WHERE id = ? AND campaign_id = ?",
+        (variation_id, campaign_id),
+    )
+    variation = await row.fetchone()
+    if not variation:
+        raise HTTPException(status_code=404, detail="Variation not found")
+
+    # Check we're not deactivating the last active one
+    if variation["is_active"]:
+        count_row = await db.execute(
+            "SELECT COUNT(*) as cnt FROM campaign_variations WHERE campaign_id = ? AND is_active = 1",
+            (campaign_id,),
+        )
+        active_count = (await count_row.fetchone())["cnt"]
+        if active_count <= 1:
+            raise HTTPException(status_code=409, detail="Pelo menos uma variação deve ficar ativa")
+
+    new_state = 0 if variation["is_active"] else 1
+    await db.execute(
+        "UPDATE campaign_variations SET is_active = ? WHERE id = ?",
+        (new_state, variation_id),
+    )
+    await db.commit()
+
+    return {"status": "ok", "is_active": bool(new_state)}
+
+
 @router.post("/campaigns/{campaign_id}/start")
 async def start_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Start a draft campaign."""
@@ -229,14 +280,14 @@ async def start_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(ge
     if campaign["status"] != "draft":
         raise HTTPException(status_code=409, detail="Campaign must be in draft status to start")
 
-    # Check variations exist
+    # Check active variations exist
     var_row = await db.execute(
-        "SELECT COUNT(*) as cnt FROM campaign_variations WHERE campaign_id = ?",
+        "SELECT COUNT(*) as cnt FROM campaign_variations WHERE campaign_id = ? AND is_active = 1",
         (campaign_id,),
     )
     var_count = (await var_row.fetchone())["cnt"]
     if var_count == 0:
-        raise HTTPException(status_code=409, detail="Generate variations before starting")
+        raise HTTPException(status_code=409, detail="Pelo menos uma variação deve estar ativa")
 
     await db.execute(
         "UPDATE campaigns SET status = 'running', next_send_at = datetime('now') WHERE id = ?",

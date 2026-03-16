@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS campaign_variations (
     campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
     variation_index INTEGER NOT NULL,
     variation_text TEXT NOT NULL,
-    usage_count INTEGER DEFAULT 0
+    usage_count INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1
 );
 """
 
@@ -335,6 +336,8 @@ MIGRATIONS = [
      "CREATE INDEX IF NOT EXISTS idx_edit_pairs_conversation_id ON edit_pairs(conversation_id)"),
     ("idx_campaign_contacts_camp_status",
      "CREATE INDEX IF NOT EXISTS idx_campaign_contacts_camp_status ON campaign_contacts(campaign_id, status)"),
+    ("campaign_variations_is_active",
+     "ALTER TABLE campaign_variations ADD COLUMN is_active INTEGER DEFAULT 1"),
 ]
 
 _chroma_client = None

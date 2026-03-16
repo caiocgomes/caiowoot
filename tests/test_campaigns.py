@@ -117,10 +117,13 @@ async def test_generate_variations(client, db):
 
         response = await client.post(f"/campaigns/{campaign_id}/generate-variations")
         assert response.status_code == 200
-        assert response.json()["count"] == 8
+        assert response.json()["count"] == 9  # 8 generated + 1 base message
 
     detail = await client.get(f"/campaigns/{campaign_id}")
-    assert len(detail.json()["variations"]) == 8
+    assert len(detail.json()["variations"]) == 9
+    # First variation is the original base message (index -1)
+    assert detail.json()["variations"][0]["variation_index"] == -1
+    assert detail.json()["variations"][0]["variation_text"] == "Oi {{nome}}"
 
 
 @pytest.mark.asyncio
