@@ -100,7 +100,7 @@ function switchTab(tab) {
     // Tool state: show tool name with back button
     title.textContent = TOOL_LABELS[tab] || tab;
     menuBtn.style.display = "none";
-    backBtn.style.display = "";
+    backBtn.style.display = "inline-block";
 
     if (tab === "knowledge") {
       kbList.style.display = "block";
