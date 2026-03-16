@@ -13,6 +13,9 @@
   #review-back-btn { display: inline-block; }
   #context-panel { display: none; }
 
+  /* Tools menu: touch-friendly items */
+  .tools-menu-item { min-height: 44px; }
+
   /* Sticky chat header */
   #chat-header { position: sticky; top: 0; z-index: 10; }
 

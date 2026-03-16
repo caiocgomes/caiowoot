@@ -1,11 +1,36 @@
-/* Sidebar, tabs, conversation list, notification dot */
+/* Sidebar, navigation, conversation list */
 
 #sidebar { width: 320px; background: var(--color-bg-card); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; }
-#sidebar-header { padding: var(--space-lg); border-bottom: 1px solid var(--color-border); font-size: 18px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
-.notif-btn { display: none; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-input); padding: var(--space-xs) 10px; font-size: 12px; cursor: pointer; color: var(--color-text-dim); margin-left: auto; margin-right: var(--space-sm); }
-#conv-search-wrapper { padding: 8px 16px; border-bottom: 1px solid #eee; }
-#conv-search { width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; }
-#conv-search::placeholder { color: #999; }
+
+/* Header */
+#sidebar-header { padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--color-border); font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: var(--space-sm); }
+#sidebar-title { flex: 1; }
+.notif-btn { display: none; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-input); padding: var(--space-xs) 10px; font-size: 12px; cursor: pointer; color: var(--color-text-dim); }
+
+/* Tools menu button (☰) */
+#tools-menu-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 2px var(--space-xs); color: var(--color-text-muted); flex-shrink: 0; }
+#tools-menu-btn:hover { color: var(--color-text); }
+
+/* Back button (← Conversas) - hidden by default */
+#tools-back-btn { display: none; background: none; border: none; font-size: 20px; cursor: pointer; padding: 2px var(--space-xs); color: var(--color-text-muted); flex-shrink: 0; }
+#tools-back-btn:hover { color: var(--color-text); }
+
+/* Tools dropdown menu */
+#tools-menu { display: none; border-bottom: 1px solid var(--color-border); background: var(--color-bg-card); }
+#tools-menu.open { display: block; }
+.tools-menu-item { display: flex; align-items: center; gap: var(--space-md); width: 100%; padding: var(--space-md) var(--space-lg); border: none; background: none; cursor: pointer; text-align: left; font-family: inherit; }
+.tools-menu-item:hover { background: var(--color-bg-hover); }
+.tools-menu-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+.tools-menu-text { display: flex; flex-direction: column; min-width: 0; }
+.tools-menu-name { font-size: 14px; font-weight: 600; color: var(--color-text); }
+.tools-menu-hint { font-size: 12px; color: var(--color-text-muted); }
+
+/* Search */
+#conv-search-wrapper { padding: var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--color-border-light); }
+#conv-search { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-input); font-size: 13px; font-family: inherit; }
+#conv-search::placeholder { color: var(--color-text-light); }
+
+/* Conversation list */
 #conversation-list { flex: 1; overflow-y: auto; }
 
 /* Conversation items */
@@ -20,22 +45,16 @@
 .conv-time { font-size: 11px; color: var(--color-text-light); float: right; }
 .conv-responder { font-size: 11px; color: var(--color-primary); margin-top: 2px; font-weight: 500; }
 
-/* Clock icon for conversation list */
+/* Clock icon */
 .conv-clock { font-size: 12px; margin-left: var(--space-xs); vertical-align: middle; }
 
-/* Sidebar tabs */
-#sidebar-tabs { display: flex; border-bottom: 1px solid var(--color-border); }
-.sidebar-tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--color-bg-card); border: none; border-bottom: 2px solid transparent; color: var(--color-text-muted); }
-.sidebar-tab.active { color: var(--color-text); border-bottom-color: var(--color-primary); }
-.sidebar-tab:hover { background: var(--color-bg-hover-subtle); }
-
-/* Hamburger button - hidden on desktop */
+/* Hamburger button - hidden on desktop, used in mobile chat view */
 #hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: var(--space-xs) var(--space-sm); margin-right: var(--space-sm); }
 
-/* Sidebar backdrop */
 /* WebSocket status dot */
-.ws-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
-.ws-dot.connected { background: #25D366; }
-.ws-dot.disconnected { background: #c62828; }
+.ws-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: var(--space-sm); flex-shrink: 0; }
+.ws-dot.connected { background: var(--color-primary); }
+.ws-dot.disconnected { background: var(--color-danger); }
 
+/* Sidebar backdrop */
 #sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-bg-overlay); z-index: 99; }

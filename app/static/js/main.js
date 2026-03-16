@@ -16,12 +16,39 @@ import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFu
 // Wire up notification's openConversation reference
 setOpenConversation(openConversation);
 
-// --- switchTab (replaces the original monolithic switchTab) ---
+// --- Tools menu ---
+const TOOL_LABELS = {
+  knowledge: '📚 Conhecimento',
+  review: '🧠 Aprendizado',
+  campaigns: '📢 Campanhas',
+};
+
+function toggleToolsMenu() {
+  const menu = document.getElementById('tools-menu');
+  menu.classList.toggle('open');
+}
+
+function closeToolsMenu() {
+  document.getElementById('tools-menu').classList.remove('open');
+}
+
+function backToConversations() {
+  switchTab('conversations');
+}
+
+// Close tools menu when clicking outside
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('tools-menu');
+  const btn = document.getElementById('tools-menu-btn');
+  if (menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+    closeToolsMenu();
+  }
+});
+
+// --- switchTab ---
 function switchTab(tab) {
   state.currentTab = tab;
-  document.querySelectorAll(".sidebar-tab").forEach(t => {
-    t.classList.toggle("active", t.dataset.tab === tab);
-  });
+  closeToolsMenu();
 
   const convList = document.getElementById("conversation-list");
   const convSearch = document.getElementById("conv-search-wrapper");
@@ -45,7 +72,16 @@ function switchTab(tab) {
   hideRuleDetail();
   hideCampaignPanels();
 
+  // Update header
+  const title = document.getElementById('sidebar-title');
+  const menuBtn = document.getElementById('tools-menu-btn');
+  const backBtn = document.getElementById('tools-back-btn');
+
   if (tab === "conversations") {
+    // Default state: show conversations
+    title.textContent = "CaioWoot";
+    menuBtn.style.display = "";
+    backBtn.style.display = "none";
     convList.style.display = "block";
     if (convSearch) convSearch.style.display = "block";
     if (state.currentConversationId) {
@@ -54,20 +90,27 @@ function switchTab(tab) {
       document.getElementById("main-empty").style.display = "flex";
       document.getElementById("main-empty").textContent = "Selecione uma conversa";
     }
-  } else if (tab === "knowledge") {
-    kbList.style.display = "block";
-    loadKnowledgeDocs();
-  } else if (tab === "review") {
-    reviewList.style.display = "block";
-    document.getElementById("main-empty").style.display = "flex";
-    document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
-    loadReviewItems();
-    loadRules();
-  } else if (tab === "campaigns") {
-    campaignList.style.display = "block";
-    document.getElementById("main-empty").style.display = "flex";
-    document.getElementById("main-empty").textContent = "Selecione ou crie uma campanha";
-    loadCampaigns();
+  } else {
+    // Tool state: show tool name with back button
+    title.textContent = TOOL_LABELS[tab] || tab;
+    menuBtn.style.display = "none";
+    backBtn.style.display = "";
+
+    if (tab === "knowledge") {
+      kbList.style.display = "block";
+      loadKnowledgeDocs();
+    } else if (tab === "review") {
+      reviewList.style.display = "block";
+      document.getElementById("main-empty").style.display = "flex";
+      document.getElementById("main-empty").textContent = "Selecione uma anotação ou regra";
+      loadReviewItems();
+      loadRules();
+    } else if (tab === "campaigns") {
+      campaignList.style.display = "block";
+      document.getElementById("main-empty").style.display = "flex";
+      document.getElementById("main-empty").textContent = "Selecione ou crie uma campanha";
+      loadCampaigns();
+    }
   }
 }
 
@@ -169,6 +212,8 @@ connectWS();
 
 // --- Expose functions to window for onclick handlers in HTML ---
 window.switchTab = switchTab;
+window.toggleToolsMenu = toggleToolsMenu;
+window.backToConversations = backToConversations;
 window.openConversation = openConversation;
 window.closeSidebar = closeSidebar;
 window.toggleSidebar = toggleSidebar;

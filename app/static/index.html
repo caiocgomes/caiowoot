@@ -23,12 +23,35 @@
 </head>
 <body>
 <div id="sidebar">
-  <div id="sidebar-header">CaioWoot <button id="notif-btn" class="notif-btn">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes" aria-label="Configurações">&#x2699;</button></div>
-  <div id="sidebar-tabs">
-    <button class="sidebar-tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversas</button>
-    <button class="sidebar-tab" data-tab="knowledge" onclick="switchTab('knowledge')">Conhecimento</button>
-    <button class="sidebar-tab" data-tab="review" onclick="switchTab('review')">Aprendizado</button>
-    <button class="sidebar-tab" data-tab="campaigns" onclick="switchTab('campaigns')">Campanhas</button>
+  <div id="sidebar-header">
+    <button id="tools-menu-btn" onclick="toggleToolsMenu()" aria-label="Ferramentas">&#x2630;</button>
+    <button id="tools-back-btn" onclick="backToConversations()" aria-label="Voltar para conversas">&#x2190;</button>
+    <span id="sidebar-title">CaioWoot</span>
+    <button id="notif-btn" class="notif-btn">Ativar notificações</button>
+    <button id="settings-gear" onclick="openSettings()" title="Configuracoes" aria-label="Configurações">&#x2699;</button>
+  </div>
+  <div id="tools-menu">
+    <button class="tools-menu-item" onclick="switchTab('knowledge')">
+      <span class="tools-menu-icon">&#x1F4DA;</span>
+      <div class="tools-menu-text">
+        <span class="tools-menu-name">Conhecimento</span>
+        <span class="tools-menu-hint">Base de conhecimento dos cursos</span>
+      </div>
+    </button>
+    <button class="tools-menu-item" onclick="switchTab('review')">
+      <span class="tools-menu-icon">&#x1F9E0;</span>
+      <div class="tools-menu-text">
+        <span class="tools-menu-name">Aprendizado</span>
+        <span class="tools-menu-hint">Revisão de anotações e regras</span>
+      </div>
+    </button>
+    <button class="tools-menu-item" onclick="switchTab('campaigns')">
+      <span class="tools-menu-icon">&#x1F4E2;</span>
+      <div class="tools-menu-text">
+        <span class="tools-menu-name">Campanhas</span>
+        <span class="tools-menu-hint">Envio em massa</span>
+      </div>
+    </button>
   </div>
   <div id="conv-search-wrapper">
     <input id="conv-search" type="text" placeholder="Buscar conversa..." oninput="filterConversations(this.value)">
