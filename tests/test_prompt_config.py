@@ -101,5 +101,7 @@ async def test_defaults_contain_all_expected_keys():
         "postura", "tom", "regras",
         "approach_direta", "approach_consultiva", "approach_casual",
         "summary_prompt", "annotation_prompt",
+        "qualifying_attendant_name", "qualifying_greeting",
+        "qualifying_handoff", "qualifying_questions",
     }
     assert set(PROMPT_DEFAULTS.keys()) == expected_keys

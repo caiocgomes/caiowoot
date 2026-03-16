@@ -5,31 +5,11 @@ import logging
 from app.database import get_db
 from app.services.claude_client import get_anthropic_client
 from app.services.evolution import send_text_message
+from app.services.prompt_config import get_all_prompts
 from app.services.situation_summary import generate_situation_summary
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
-
-QUALIFYING_SYSTEM_PROMPT = """Você é um assistente de pré-atendimento do Caio ou da Bia. Seu papel é:
-
-1. Se apresentar de forma transparente: você é um assistente virtual, o Caio ou a Bia vão atender em seguida
-2. Coletar informações básicas sobre a pessoa:
-   - Qual curso interessa (opções: O Senhor das LLMs, Do Zero a Analista, De Analista a CDO, AI para Influencers)
-   - Se já trabalha na área / nível de experiência
-   - Qual o objetivo com o curso
-   - Se tem alguma dúvida específica
-3. Quando tiver informação suficiente (2-3 respostas úteis), fazer o handoff
-
-REGRAS ABSOLUTAS:
-- NUNCA finja ser humano. Você é um assistente virtual.
-- NUNCA fale preço, desconto ou condições de pagamento
-- NUNCA prometa nada sobre o curso
-- NUNCA dê opinião sobre qual curso é melhor
-- Se a pessoa perguntar sobre preço/pagamento, diga que o Caio ou a Bia vão explicar isso
-- Seja breve, informal, amigável. É WhatsApp, não email.
-- Máximo de 4 trocas antes do handoff obrigatório
-- Quando fizer handoff, diga algo como "Beleza! Já passei todas as informações pro Caio. Ele já tem todo o contexto da nossa conversa e vai te ajudar a partir daqui!"
-"""
 
 QUALIFY_TOOL = {
     "name": "qualify_response",
@@ -53,6 +33,47 @@ QUALIFY_TOOL = {
         "required": ["message", "ready_for_handoff"]
     }
 }
+
+
+async def _build_qualifying_prompt(db, force_handoff=False) -> str:
+    """Build the qualifying system prompt from configurable settings."""
+    prompts = await get_all_prompts(db)
+
+    attendant_name = prompts.get("qualifying_attendant_name", "o atendente")
+    questions = prompts.get("qualifying_questions", "- Qual curso interessa\n- Experiência na área\n- Objetivo com o curso")
+    greeting_template = prompts.get("qualifying_greeting", "")
+    handoff_template = prompts.get("qualifying_handoff", "")
+
+    # Build greeting and handoff examples with attendant name
+    greeting_example = greeting_template.replace("{attendant_name}", attendant_name) if greeting_template else ""
+    handoff_example = handoff_template.replace("{attendant_name}", attendant_name) if handoff_template else ""
+
+    prompt = f"""Você é um assistente de pré-atendimento do {attendant_name}. Seu papel é:
+
+1. Se apresentar de forma transparente: você é um assistente virtual, o {attendant_name} vai atender em seguida
+2. Coletar informações básicas sobre a pessoa:
+{questions}
+3. Quando tiver informação suficiente (2-3 respostas úteis), fazer o handoff
+
+REGRAS ABSOLUTAS:
+- NUNCA finja ser humano. Você é um assistente virtual.
+- NUNCA fale preço, desconto ou condições de pagamento
+- NUNCA prometa nada sobre o curso
+- NUNCA dê opinião sobre qual curso é melhor
+- Se a pessoa perguntar sobre preço/pagamento, diga que o {attendant_name} vai explicar isso
+- Seja breve, informal, amigável. É WhatsApp, não email.
+- Máximo de 4 trocas antes do handoff obrigatório"""
+
+    if greeting_example:
+        prompt += f"\n- Na primeira mensagem, use algo como: \"{greeting_example}\""
+
+    if handoff_example:
+        prompt += f"\n- Quando fizer handoff, use algo como: \"{handoff_example}\""
+
+    if force_handoff:
+        prompt += "\n\nIMPORTANTE: Você já trocou 4 mensagens. Faça o handoff AGORA, independente de ter todas as informações."
+
+    return prompt
 
 
 async def auto_qualify_respond(conversation_id: int):
@@ -87,9 +108,8 @@ async def auto_qualify_respond(conversation_id: int):
         # If we've hit 4 bot messages already, force handoff
         force_handoff = bot_messages >= 4
 
-        system_prompt = QUALIFYING_SYSTEM_PROMPT
-        if force_handoff:
-            system_prompt += "\n\nIMPORTANTE: Você já trocou 4 mensagens. Faça o handoff AGORA, independente de ter todas as informações."
+        # Build prompt from configurable settings
+        system_prompt = await _build_qualifying_prompt(db, force_handoff)
 
         # Call Claude
         client = get_anthropic_client()

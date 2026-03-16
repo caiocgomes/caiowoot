@@ -28,9 +28,11 @@ export async function openSettings() {
     state.settingsIsAdmin = false;
   }
 
-  // Show/hide prompts tab
+  // Show/hide admin tabs
   const promptsTab = document.getElementById("settings-prompts-tab");
   promptsTab.style.display = state.settingsIsAdmin ? "" : "none";
+  const qualifyingTab = document.getElementById("settings-qualifying-tab");
+  qualifyingTab.style.display = state.settingsIsAdmin ? "" : "none";
 
   // Load data
   await loadSettingsProfile();
@@ -92,6 +94,26 @@ export function renderSettingsTab(tab) {
         <textarea id="settings-context" rows="6" placeholder="Informacoes que a IA deve saber sobre voce. Ex: Trabalho na equipe do Caio. Sou responsavel pelo suporte tecnico. Nao sou o dono dos cursos.">${escapeHtml(state.settingsProfile.context || "")}</textarea>
       </div>
     `;
+  } else if (tab === "qualifying") {
+    const prompts = state.settingsPrompts;
+    body.innerHTML = `
+      <div class="settings-field">
+        <label>Nome do atendente</label>
+        <input type="text" id="settings-qualifying-attendant" value="${escapeHtml(prompts.qualifying_attendant_name || "")}" placeholder="Ex: Caio ou Bia">
+      </div>
+      <div class="settings-field">
+        <label>Mensagem de abertura</label>
+        <textarea id="settings-qualifying-greeting" rows="4" placeholder="Use {attendant_name} para inserir o nome do atendente">${escapeHtml(prompts.qualifying_greeting || "")}</textarea>
+      </div>
+      <div class="settings-field">
+        <label>Perguntas de qualificação (uma por linha com -)</label>
+        <textarea id="settings-qualifying-questions" rows="5" placeholder="- Qual curso interessa&#10;- Experiência na área&#10;- Objetivo com o curso">${escapeHtml(prompts.qualifying_questions || "")}</textarea>
+      </div>
+      <div class="settings-field">
+        <label>Mensagem de transferência</label>
+        <textarea id="settings-qualifying-handoff" rows="3" placeholder="Use {attendant_name} para inserir o nome do atendente">${escapeHtml(prompts.qualifying_handoff || "")}</textarea>
+      </div>
+    `;
   } else if (tab === "prompts") {
     let html = "";
     for (const [key, label] of Object.entries(PROMPT_LABELS)) {
@@ -126,6 +148,23 @@ export async function saveSettings() {
         statusEl.textContent = "Perfil salvo!";
       } else {
         statusEl.textContent = "Erro ao salvar perfil";
+      }
+    } else if (state.settingsCurrentTab === "qualifying") {
+      const updates = {
+        qualifying_attendant_name: document.getElementById("settings-qualifying-attendant").value,
+        qualifying_greeting: document.getElementById("settings-qualifying-greeting").value,
+        qualifying_questions: document.getElementById("settings-qualifying-questions").value,
+        qualifying_handoff: document.getElementById("settings-qualifying-handoff").value,
+      };
+
+      const res = await saveSettingsPrompts(updates);
+
+      if (res.ok) {
+        Object.assign(state.settingsPrompts, updates);
+        statusEl.textContent = "Qualificação salva!";
+      } else {
+        const err = await res.json();
+        statusEl.textContent = err.detail || "Erro ao salvar";
       }
     } else if (state.settingsCurrentTab === "prompts") {
       const updates = {};

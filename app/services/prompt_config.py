@@ -44,6 +44,15 @@ Se o operador aceitou sem editar:
 - Note que foi validada por aceitação
 
 Responda em 2-3 frases, direto ao ponto. Apenas o texto da anotação, sem formatação.""",
+    # --- Qualifying bot configs ---
+    "qualifying_attendant_name": "Caio ou Bia",
+    "qualifying_greeting": """Oi! Sou um assistente virtual do {attendant_name}. Ele já vai te atender!
+Enquanto isso, posso ir adiantando algumas coisas pra agilizar o papo. Me conta: qual curso te interessou?""",
+    "qualifying_handoff": """Beleza! Já passei todas as informações pro {attendant_name}. Ele já tem todo o contexto da nossa conversa e vai te ajudar a partir daqui!""",
+    "qualifying_questions": """- Qual curso interessa (opções: O Senhor das LLMs, Do Zero a Analista, De Analista a CDO, AI para Influencers)
+- Se já trabalha na área / nível de experiência
+- Qual o objetivo com o curso
+- Se tem alguma dúvida específica""",
 }
 
 
