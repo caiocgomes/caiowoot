@@ -31,10 +31,9 @@
   /* Colors - Text */
   --color-text: #333;
   --color-text-secondary: #666;
-  --color-text-muted: #888;
-  --color-text-light: #999;
+  --color-text-muted: #595959;
+  --color-text-light: #767676;
   --color-text-dim: #555;
-  --color-text-faint: #bbb;
   --color-text-placeholder: #bbb;
 
   /* Colors - Borders */
@@ -72,7 +71,7 @@
   --space-md: 12px;
   --space-lg: 16px;
   --space-xl: 24px;
-  --space-xxl: 20px;
+  --space-xxl: 32px;
 
   /* Border Radius */
   --radius-sm: 4px;
@@ -84,6 +83,17 @@
 
   /* Font */
   --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Typography */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
 
   /* Shadows */
   --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.15);

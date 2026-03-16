@@ -6,6 +6,15 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_http_client = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=30)
+    return _http_client
+
 
 async def send_text_message(phone_number: str, text: str) -> dict:
     url = f"{settings.evolution_api_url}/message/sendText/{settings.evolution_instance}"
@@ -20,10 +29,10 @@ async def send_text_message(phone_number: str, text: str) -> dict:
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        return response.json()
+    client = get_http_client()
+    response = await client.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    return response.json()
 
 
 async def send_media_message(phone_number: str, base64_data: str, mime_type: str, caption: str = "") -> dict:
@@ -42,10 +51,10 @@ async def send_media_message(phone_number: str, base64_data: str, mime_type: str
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        return response.json()
+    client = get_http_client()
+    response = await client.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    return response.json()
 
 
 async def send_document_message(phone_number: str, base64_data: str, filename: str, caption: str = "") -> dict:
@@ -64,7 +73,7 @@ async def send_document_message(phone_number: str, base64_data: str, filename: s
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        return response.json()
+    client = get_http_client()
+    response = await client.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    return response.json()

@@ -1,8 +1,7 @@
 import logging
 
-import anthropic
-
 from app.config import settings
+from app.services.claude_client import get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ async def generate_situation_summary(
 
     Returns dict with keys: summary (str), product (str|None), stage (str|None).
     """
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_anthropic_client()
 
     system = await _get_summary_prompt()
 

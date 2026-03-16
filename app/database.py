@@ -107,6 +107,45 @@ CREATE TABLE IF NOT EXISTS scheduled_sends (
     sent_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS analysis_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    status TEXT DEFAULT 'running',
+    total_conversations INTEGER DEFAULT 0,
+    total_operators INTEGER DEFAULT 0,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS conversation_assessments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_run_id INTEGER NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    operator_name TEXT,
+    engagement_level TEXT,
+    sale_status TEXT,
+    recovery_potential TEXT,
+    recovery_suggestion TEXT,
+    factual_issues_json TEXT,
+    overall_assessment TEXT,
+    metrics_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS operator_digests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_run_id INTEGER NOT NULL,
+    operator_name TEXT NOT NULL,
+    summary TEXT,
+    patterns_json TEXT,
+    factual_issues_json TEXT,
+    salvageable_sales_json TEXT,
+    metrics_json TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -288,6 +327,14 @@ MIGRATIONS = [
     """),
     ("origin_campaign_id_on_conversations",
      "ALTER TABLE conversations ADD COLUMN origin_campaign_id INTEGER"),
+    ("idx_messages_conversation_id",
+     "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)"),
+    ("idx_drafts_conv_status",
+     "CREATE INDEX IF NOT EXISTS idx_drafts_conv_status ON drafts(conversation_id, status)"),
+    ("idx_edit_pairs_conversation_id",
+     "CREATE INDEX IF NOT EXISTS idx_edit_pairs_conversation_id ON edit_pairs(conversation_id)"),
+    ("idx_campaign_contacts_camp_status",
+     "CREATE INDEX IF NOT EXISTS idx_campaign_contacts_camp_status ON campaign_contacts(campaign_id, status)"),
 ]
 
 _chroma_client = None
@@ -308,11 +355,20 @@ def get_chroma_collection():
 
 
 async def get_db() -> aiosqlite.Connection:
+    """Create a standalone DB connection. Used by background tasks that run outside request context."""
     db = await aiosqlite.connect(settings.database_path)
     db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA journal_mode=WAL")
-    await db.execute("PRAGMA foreign_keys=ON")
     return db
+
+
+async def get_db_connection():
+    """FastAPI dependency that provides a DB connection per request."""
+    db = await aiosqlite.connect(settings.database_path)
+    db.row_factory = aiosqlite.Row
+    try:
+        yield db
+    finally:
+        await db.close()
 
 
 async def _run_migrations(db: aiosqlite.Connection):
@@ -329,8 +385,14 @@ async def _run_migrations(db: aiosqlite.Connection):
         try:
             await db.execute(sql)
             await db.execute("INSERT INTO _migrations (name) VALUES (?)", (name,))
-        except Exception:
-            pass  # Column/table already exists from SCHEMA
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "already exists" in err_msg or "duplicate column" in err_msg:
+                await db.execute("INSERT OR IGNORE INTO _migrations (name) VALUES (?)", (name,))
+            else:
+                import logging
+                logging.getLogger(__name__).error("Migration '%s' failed: %s", name, e)
+                raise
 
 
 async def init_db():
@@ -340,6 +402,8 @@ async def init_db():
     os.makedirs(db_path.parent / "attachments", exist_ok=True)
     db = await get_db()
     try:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA foreign_keys=ON")
         await db.executescript(SCHEMA)
         await _run_migrations(db)
         await db.commit()

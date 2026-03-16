@@ -110,7 +110,7 @@ async def test_generate_variations(client, db):
     mock_response = MagicMock()
     mock_response.content = [MagicMock(text="Var 1---VARIACAO---Var 2---VARIACAO---Var 3---VARIACAO---Var 4---VARIACAO---Var 5---VARIACAO---Var 6---VARIACAO---Var 7---VARIACAO---Var 8")]
 
-    with patch("app.services.campaign_variations.anthropic.AsyncAnthropic") as mock_cls:
+    with patch("app.services.campaign_variations.get_anthropic_client") as mock_cls:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_cls.return_value = mock_client

@@ -2,6 +2,7 @@ import state from '../state.js';
 import { autoResize } from '../utils.js';
 import { sendMessageApi, rewriteTextApi, getAttachmentBlob, getAttachments } from '../api.js';
 import { regenerateAll } from './drafts.js';
+import { showToast } from './toast.js';
 
 export function handleFileSelect(e) {
   const file = e.target.files[0];
@@ -60,6 +61,7 @@ export async function sendMessage() {
 
   const btn = document.getElementById("send-btn");
   btn.disabled = true;
+  btn.textContent = "Enviando...";
 
   try {
     const formData = new FormData();
@@ -88,9 +90,11 @@ export async function sendMessage() {
 
     if (!res.ok) {
       const err = await res.json();
-      alert(`Erro ao enviar: ${err.detail || "erro desconhecido"}`);
+      showToast(`Erro ao enviar: ${err.detail || "erro desconhecido"}`, 'error');
       return;
     }
+
+    showToast("Mensagem enviada", "success");
 
     input.value = "";
     state.currentDraftId = null;
@@ -104,6 +108,7 @@ export async function sendMessage() {
     document.getElementById("draft-cards-container").style.display = "none";
     document.getElementById("instruction-input").value = "";
   } finally {
+    btn.textContent = "Enviar";
     btn.disabled = false;
   }
 }
@@ -123,7 +128,7 @@ export async function rewriteText() {
 
     if (!res.ok) {
       const err = await res.json();
-      alert(`Erro ao reescrever: ${err.detail || "erro desconhecido"}`);
+      showToast(`Erro ao reescrever: ${err.detail || "erro desconhecido"}`, 'error');
       return;
     }
 
@@ -131,7 +136,7 @@ export async function rewriteText() {
     input.value = data.text;
     autoResize(input);
   } catch (e) {
-    alert("Erro ao reescrever: falha na conexão");
+    showToast("Erro ao reescrever: falha na conexão", 'error');
   } finally {
     btn.textContent = originalLabel;
     btn.disabled = !input.value.trim();

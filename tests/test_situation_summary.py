@@ -17,7 +17,7 @@ def _make_tool_use_response(summary="Resumo.", product=None, stage=None):
 
 @pytest.mark.asyncio
 async def test_generate_summary_calls_haiku():
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=_make_tool_use_response(
@@ -45,7 +45,7 @@ async def test_generate_summary_calls_haiku():
 
 @pytest.mark.asyncio
 async def test_generate_summary_without_contact_name():
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=_make_tool_use_response(summary="Primeiro contato genérico.")
@@ -61,7 +61,7 @@ async def test_generate_summary_without_contact_name():
 
 @pytest.mark.asyncio
 async def test_generate_summary_null_product_stage():
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=_make_tool_use_response(
@@ -81,7 +81,7 @@ async def test_generate_summary_null_product_stage():
 @pytest.mark.asyncio
 async def test_generate_summary_fallback_no_tool_block():
     """If response has no tool_use block, returns empty fallback."""
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_response = MagicMock()
         text_block = MagicMock()

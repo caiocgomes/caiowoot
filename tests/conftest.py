@@ -16,7 +16,7 @@ os.environ["DATABASE_PATH"] = ":memory:"
 os.environ["APP_PASSWORD"] = ""
 
 from app.main import app
-from app.database import get_db, init_db
+from app.database import get_db, get_db_connection, init_db
 import app.database as db_module
 
 
@@ -49,24 +49,24 @@ async def db():
     async def mock_get_db():
         return wrapper
 
+    async def override_get_db_connection():
+        yield wrapper
+
+    # Override FastAPI dependency for all route handlers
+    app.dependency_overrides[get_db_connection] = override_get_db_connection
+
     from contextlib import ExitStack
 
+    # Only patch get_db for modules that still use it directly (background tasks/services)
     db_patches = [
         "app.database.get_db",
-        "app.routes.webhook.get_db",
-        "app.routes.conversations.get_db",
-        "app.routes.messages.get_db",
-        "app.routes.review.get_db",
-        "app.routes.settings.get_db",
         "app.services.draft_engine.get_db",
         "app.services.learned_rules.get_db",
         "app.services.prompt_config.get_db",
         "app.services.operator_profile.get_db",
         "app.services.strategic_annotation.get_db",
         "app.services.send_executor.get_db",
-        "app.routes.scheduled.get_db",
         "app.services.scheduler.get_db",
-        "app.routes.campaigns.get_db",
         "app.services.campaign_executor.get_db",
     ]
 
@@ -74,9 +74,12 @@ async def db():
         for target in db_patches:
             stack.enter_context(patch(target, mock_get_db))
 
+        stack.enter_context(patch("app.services.prompt_builder.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}))
         stack.enter_context(patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}))
         stack.enter_context(patch("app.routes.conversations.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}))
+        stack.enter_context(patch("app.services.prompt_builder.retrieve_similar", return_value=[]))
         stack.enter_context(patch("app.services.draft_engine.retrieve_similar", return_value=[]))
+        stack.enter_context(patch("app.services.prompt_builder.get_active_rules", new_callable=AsyncMock, return_value=[]))
         stack.enter_context(patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]))
         mock_ws = stack.enter_context(patch("app.websocket_manager.manager"))
         mock_ws.broadcast = AsyncMock()
@@ -84,6 +87,7 @@ async def db():
 
         yield conn
 
+    app.dependency_overrides.clear()
     await conn.close()
 
 
@@ -98,33 +102,29 @@ async def client(db):
 @pytest.fixture
 def mock_evolution_api():
     """Mock Evolution API send endpoint."""
-    with patch("app.services.evolution.httpx.AsyncClient") as mock:
-        mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.json.return_value = {
-            "key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": True, "id": "sent-123"},
-            "status": "PENDING",
-        }
-        mock_response.raise_for_status = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = AsyncMock(return_value=mock_response)
-        mock.return_value = mock_client
+    mock_client = AsyncMock()
+    mock_response = AsyncMock()
+    mock_response.json.return_value = {
+        "key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": True, "id": "sent-123"},
+        "status": "PENDING",
+    }
+    mock_response.raise_for_status = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    with patch("app.services.evolution.get_http_client", return_value=mock_client):
         yield mock_client
 
 
 @pytest.fixture
 def mock_claude_api():
     """Mock Claude API for draft generation (3 variations) using tool_use."""
-    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock:
-        mock_client = AsyncMock()
+    mock_client = AsyncMock()
 
-        mock_client.messages.create = AsyncMock(side_effect=[
-            make_draft_tool_response("Oi! Qual seu interesse em IA?", "Abordagem direta."),
-            make_draft_tool_response("E aí! Me conta, o que te trouxe aqui?", "Abordagem consultiva."),
-            make_draft_tool_response("Opa! Tudo bem? Em que posso ajudar?", "Abordagem casual."),
-        ])
-        mock.return_value = mock_client
+    mock_client.messages.create = AsyncMock(side_effect=[
+        make_draft_tool_response("Oi! Qual seu interesse em IA?", "Abordagem direta."),
+        make_draft_tool_response("E aí! Me conta, o que te trouxe aqui?", "Abordagem consultiva."),
+        make_draft_tool_response("Opa! Tudo bem? Em que posso ajudar?", "Abordagem casual."),
+    ])
+    with patch("app.services.claude_client.get_anthropic_client", return_value=mock_client):
         yield mock_client
 
 

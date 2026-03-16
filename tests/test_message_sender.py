@@ -151,14 +151,11 @@ async def test_send_evolution_failure(client, db):
     )
     await db.commit()
 
-    with patch("app.services.evolution.httpx.AsyncClient") as mock:
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = AsyncMock(side_effect=httpx.HTTPStatusError(
-            "500", request=AsyncMock(), response=AsyncMock(status_code=500)
-        ))
-        mock.return_value = mock_client
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=httpx.HTTPStatusError(
+        "500", request=AsyncMock(), response=AsyncMock(status_code=500)
+    ))
+    with patch("app.services.evolution.get_http_client", return_value=mock_client):
 
         resp = await client.post(
             "/conversations/1/send",

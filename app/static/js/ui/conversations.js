@@ -63,6 +63,15 @@ export function renderConversationList(conversations) {
   }
 }
 
+export function filterConversations(query) {
+  const items = document.querySelectorAll('#conversation-list .conv-item');
+  const q = query.toLowerCase();
+  items.forEach(item => {
+    const name = item.querySelector('.conv-name')?.textContent.toLowerCase() || '';
+    item.style.display = name.includes(q) ? '' : 'none';
+  });
+}
+
 export async function openConversation(id) {
   state.currentConversationId = id;
   state.currentDraftId = null;

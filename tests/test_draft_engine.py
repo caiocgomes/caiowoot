@@ -1,6 +1,6 @@
 import json
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.draft_engine import generate_drafts
 
@@ -175,6 +175,39 @@ async def test_no_name_section_when_contact_name_empty(db, mock_claude_api):
     call_kwargs = mock_claude_api.messages.create.call_args_list[0].kwargs
     user_content = call_kwargs["messages"][0]["content"]
     assert "## Cliente" not in user_content
+
+
+@pytest.mark.asyncio
+async def test_generate_drafts_handles_claude_error(db):
+    """When Claude API fails, fallback text should be saved as draft."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name) VALUES ('5511999999999', 'Maria')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (1, 'msg-1', 'inbound', 'Quero saber sobre os cursos')"
+    )
+    await db.commit()
+
+    # Mock Claude to raise an exception on every call
+    with patch("app.services.claude_client.get_anthropic_client") as mock_anthropic:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=Exception("API rate limit exceeded")
+        )
+        mock_anthropic.return_value = mock_client
+
+        await generate_drafts(1, 1)
+
+    # Verify 3 drafts were saved with fallback error text
+    row = await db.execute("SELECT COUNT(*) as cnt FROM drafts WHERE conversation_id = 1")
+    result = await row.fetchone()
+    assert result["cnt"] == 3
+
+    row = await db.execute("SELECT draft_text, justification FROM drafts WHERE conversation_id = 1 ORDER BY variation_index")
+    drafts = await row.fetchall()
+    for draft in drafts:
+        assert draft["draft_text"] == "(Erro ao gerar esta variação)"
+        assert "API rate limit exceeded" in draft["justification"]
 
 
 @pytest.mark.asyncio

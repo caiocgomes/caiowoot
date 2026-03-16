@@ -29,7 +29,7 @@ async def _create_conversation_with_inbound(client, db):
 @pytest.mark.asyncio
 async def test_summary_returns_structured_json():
     """5.1: generate_situation_summary returns structured output with product and stage."""
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=_make_tool_use_response(
@@ -50,7 +50,7 @@ async def test_summary_returns_structured_json():
 @pytest.mark.asyncio
 async def test_summary_graceful_fallback_no_tool_block():
     """5.2: generate_situation_summary fallback when no tool_use block in response."""
-    with patch("app.services.situation_summary.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.situation_summary.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_response = MagicMock()
         text_block = MagicMock()

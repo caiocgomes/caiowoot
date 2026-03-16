@@ -55,7 +55,7 @@ async def test_analyze_conversation_basic(db):
         overall_assessment="Miguel aceitou draft sem editar. Piloto automatico.",
     )
 
-    with patch("app.services.conversation_analysis.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.conversation_analysis.get_anthropic_client") as mock_anthropic, \
          patch("app.services.conversation_analysis.load_knowledge_base", return_value="Curso X custa R$1000"):
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -103,7 +103,7 @@ async def test_analyze_conversation_pilot_mode(db):
 
     mock_response = _make_analysis_response(engagement_level="low")
 
-    with patch("app.services.conversation_analysis.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.conversation_analysis.get_anthropic_client") as mock_anthropic, \
          patch("app.services.conversation_analysis.load_knowledge_base", return_value=""):
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -139,7 +139,7 @@ async def test_analyze_conversation_factual_error(db):
         ]
     )
 
-    with patch("app.services.conversation_analysis.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.conversation_analysis.get_anthropic_client") as mock_anthropic, \
          patch("app.services.conversation_analysis.load_knowledge_base", return_value="Curso custa R$1000"):
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -167,7 +167,7 @@ async def test_analyze_conversation_no_edit_pairs(db):
 
     mock_response = _make_analysis_response()
 
-    with patch("app.services.conversation_analysis.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.conversation_analysis.get_anthropic_client") as mock_anthropic, \
          patch("app.services.conversation_analysis.load_knowledge_base", return_value=""):
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)

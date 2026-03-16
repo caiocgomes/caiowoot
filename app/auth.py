@@ -101,7 +101,7 @@ def reset_rate_limit():
 
 # --- Auth middleware ---
 
-ALLOWLIST_PATHS = {"/webhook", "/login", "/logout", "/api/operators"}
+ALLOWLIST_PATHS = {"/webhook", "/login", "/logout", "/api/operators", "/health"}
 ALLOWLIST_PREFIXES = ("/login.html", "/manifest.json", "/sw.js", "/icon-")
 
 

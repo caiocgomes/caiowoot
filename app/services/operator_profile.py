@@ -1,8 +1,10 @@
 from app.database import get_db
 
 
-async def get_profile(operator_name: str) -> dict | None:
-    db = await get_db()
+async def get_profile(operator_name: str, db=None) -> dict | None:
+    close_db = db is None
+    if db is None:
+        db = await get_db()
     try:
         row = await db.execute(
             "SELECT operator_name, display_name, context, updated_at FROM operator_profiles WHERE operator_name = ?",
@@ -11,11 +13,14 @@ async def get_profile(operator_name: str) -> dict | None:
         result = await row.fetchone()
         return dict(result) if result else None
     finally:
-        await db.close()
+        if close_db:
+            await db.close()
 
 
-async def upsert_profile(operator_name: str, display_name: str, context: str) -> None:
-    db = await get_db()
+async def upsert_profile(operator_name: str, display_name: str, context: str, db=None) -> None:
+    close_db = db is None
+    if db is None:
+        db = await get_db()
     try:
         await db.execute(
             "INSERT INTO operator_profiles (operator_name, display_name, context, updated_at) "
@@ -26,4 +31,5 @@ async def upsert_profile(operator_name: str, display_name: str, context: str) ->
         )
         await db.commit()
     finally:
-        await db.close()
+        if close_db:
+            await db.close()

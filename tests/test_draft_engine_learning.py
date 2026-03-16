@@ -59,16 +59,16 @@ async def test_learned_rules_in_system_prompt(db):
     )
     await db.commit()
 
-    with patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock) as mock_rules, \
-         patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_anthropic:
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
+
+    with patch("app.services.prompt_builder.get_active_rules", new_callable=AsyncMock) as mock_rules, \
+         patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock), \
+         patch("app.services.claude_client.get_anthropic_client", return_value=mock_client):
         mock_rules.return_value = [
             {"id": 1, "rule_text": "Sempre qualificar antes de precificar."},
             {"id": 2, "rule_text": "Objeção de preço: ancorar em custo por dia."},
         ]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
-        mock_anthropic.return_value = mock_client
 
         await generate_drafts(1, 1)
 
@@ -94,12 +94,14 @@ async def test_smart_retrieval_used_for_fewshot(db):
     )
     await db.commit()
 
-    with patch("app.services.draft_engine.retrieve_similar", return_value=[1]) as mock_ret, \
-         patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_anthropic, \
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
+
+    with patch("app.services.prompt_builder.retrieve_similar", return_value=[1]) as mock_ret, \
+         patch("app.services.draft_engine.retrieve_similar", return_value=[1]), \
+         patch("app.services.claude_client.get_anthropic_client", return_value=mock_client), \
+         patch("app.services.prompt_builder.get_active_rules", new_callable=AsyncMock, return_value=[]), \
          patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]):
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=make_draft_tool_response())
-        mock_anthropic.return_value = mock_client
 
         await generate_drafts(1, 1)
 

@@ -1,0 +1,10 @@
+services:
+  caiowoot:
+    build: .
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data:/app/data
+      - ./knowledge:/app/knowledge
+    env_file: .env
+    restart: unless-stopped

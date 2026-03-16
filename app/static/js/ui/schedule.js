@@ -2,6 +2,7 @@ import state from '../state.js';
 import { escapeHtml, normalizeTimestamp } from '../utils.js';
 import { getScheduledSends, createScheduledSend, deleteScheduledSend } from '../api.js';
 import { removeAttachment } from './compose.js';
+import { showToast } from './toast.js';
 
 export async function loadScheduledSends(convId) {
   const container = document.getElementById("scheduled-pills");
@@ -60,10 +61,10 @@ export async function cancelScheduledSend(sendId) {
     const res = await deleteScheduledSend(sendId);
     if (!res.ok) {
       const err = await res.json();
-      alert(`Erro ao cancelar: ${err.detail || "erro desconhecido"}`);
+      showToast(`Erro ao cancelar: ${err.detail || "erro desconhecido"}`, 'error');
     }
   } catch (e) {
-    alert("Erro ao cancelar agendamento");
+    showToast("Erro ao cancelar agendamento", 'error');
   }
 }
 
@@ -105,7 +106,7 @@ export async function scheduleMessage(sendAt) {
 
     if (!res.ok) {
       const err = await res.json();
-      alert(`Erro ao agendar: ${err.detail || "erro desconhecido"}`);
+      showToast(`Erro ao agendar: ${err.detail || "erro desconhecido"}`, 'error');
       return;
     }
 
@@ -122,7 +123,7 @@ export async function scheduleMessage(sendAt) {
     document.getElementById("instruction-input").value = "";
     closeScheduleDropdown();
   } catch (e) {
-    alert("Erro ao agendar: falha na conexao");
+    showToast("Erro ao agendar: falha na conexao", 'error');
   }
 }
 
@@ -157,7 +158,7 @@ export function initScheduleUI() {
 
   document.getElementById("schedule-custom-confirm").onclick = () => {
     const dt = document.getElementById("schedule-custom-datetime").value;
-    if (!dt) { alert("Selecione data e hora"); return; }
+    if (!dt) { showToast("Selecione data e hora", 'error'); return; }
     const sendAt = new Date(dt).toISOString();
     scheduleMessage(sendAt);
   };

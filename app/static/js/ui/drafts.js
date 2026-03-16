@@ -2,6 +2,13 @@ import state from '../state.js';
 import { getConversation, regenerateDraftApi } from '../api.js';
 import { loadSuggestedAttachment } from './compose.js';
 
+export function showDraftLoading() {
+  const container = document.getElementById("draft-cards-container");
+  const cardsEl = document.getElementById("draft-cards");
+  cardsEl.innerHTML = '<div class="draft-loading">Gerando sugestões...</div>';
+  container.style.display = "block";
+}
+
 export function showDrafts(drafts, groupId) {
   state.currentDrafts = drafts;
   state.currentDraftGroupId = groupId;
@@ -79,10 +86,7 @@ export function showDrafts(drafts, groupId) {
 
   container.style.display = "block";
 
-  // Auto-select first draft (on mobile, pills don't show text so this is essential)
-  if (drafts.length > 0) {
-    selectDraft(0);
-  }
+  // Auto-select removed: let operator choose explicitly
 }
 
 export function selectDraft(index) {

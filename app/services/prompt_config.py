@@ -47,8 +47,10 @@ Responda em 2-3 frases, direto ao ponto. Apenas o texto da anotação, sem forma
 }
 
 
-async def get_all_prompts() -> dict[str, str]:
-    db = await get_db()
+async def get_all_prompts(db=None) -> dict[str, str]:
+    close_db = db is None
+    if db is None:
+        db = await get_db()
     try:
         rows = await db.execute("SELECT key, value FROM prompt_config")
         stored = {row["key"]: row["value"] for row in await rows.fetchall()}
@@ -57,11 +59,14 @@ async def get_all_prompts() -> dict[str, str]:
             result[key] = stored.get(key, default)
         return result
     finally:
-        await db.close()
+        if close_db:
+            await db.close()
 
 
-async def update_prompts(updates: dict[str, str]) -> None:
-    db = await get_db()
+async def update_prompts(updates: dict[str, str], db=None) -> None:
+    close_db = db is None
+    if db is None:
+        db = await get_db()
     try:
         for key, value in updates.items():
             if key not in PROMPT_DEFAULTS:
@@ -73,13 +78,17 @@ async def update_prompts(updates: dict[str, str]) -> None:
             )
         await db.commit()
     finally:
-        await db.close()
+        if close_db:
+            await db.close()
 
 
-async def reset_prompt(key: str) -> None:
-    db = await get_db()
+async def reset_prompt(key: str, db=None) -> None:
+    close_db = db is None
+    if db is None:
+        db = await get_db()
     try:
         await db.execute("DELETE FROM prompt_config WHERE key = ?", (key,))
         await db.commit()
     finally:
-        await db.close()
+        if close_db:
+            await db.close()

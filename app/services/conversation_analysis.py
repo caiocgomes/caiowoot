@@ -2,9 +2,8 @@ import json
 import logging
 from datetime import datetime
 
-import anthropic
-
 from app.config import settings
+from app.services.claude_client import get_anthropic_client
 from app.services.knowledge import load_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -211,7 +210,7 @@ async def analyze_conversation(
     )
 
     # Call Haiku
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_anthropic_client()
     response = await client.messages.create(
         model=settings.claude_haiku_model,
         max_tokens=1024,

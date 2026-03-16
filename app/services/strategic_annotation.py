@@ -1,9 +1,8 @@
 import logging
 
-import anthropic
-
 from app.config import settings
 from app.database import get_db
+from app.services.claude_client import get_anthropic_client
 from app.services.smart_retrieval import index_edit_pair
 
 logger = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ async def generate_annotation(
     attachment_filename: str | None = None,
 ):
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        client = get_anthropic_client()
 
         system = await _get_annotation_prompt()
 

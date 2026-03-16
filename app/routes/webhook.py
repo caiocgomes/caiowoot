@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Request
+import aiosqlite
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.database import get_db
+from app.config import settings
+from app.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,14 @@ MESSAGE_EVENTS = {"messages.upsert", "MESSAGES_UPSERT"}
 
 
 @router.post("/webhook")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(get_db_connection)):
+    # Validate webhook origin if configured
+    webhook_secret = getattr(settings, 'evolution_webhook_secret', None)
+    if webhook_secret:
+        token = request.headers.get("x-evolution-token", "")
+        if token != webhook_secret:
+            raise HTTPException(status_code=401, detail="Invalid webhook token")
+
     payload = await request.json()
 
     event = payload.get("event", "")
@@ -51,107 +60,103 @@ async def receive_webhook(request: Request):
     instance = payload.get("instance", {})
     instance_name = instance.get("instanceName", "") if isinstance(instance, dict) else str(instance)
 
-    db = await get_db()
-    try:
-        # Dedup by evolution_message_id
-        existing = await db.execute(
-            "SELECT id FROM messages WHERE evolution_message_id = ?",
-            (message_id,),
+    # Dedup by evolution_message_id
+    existing = await db.execute(
+        "SELECT id FROM messages WHERE evolution_message_id = ?",
+        (message_id,),
+    )
+    if await existing.fetchone():
+        return {"status": "ignored", "reason": "duplicate"}
+
+    # Get or create conversation
+    row = await db.execute(
+        "SELECT id FROM conversations WHERE phone_number = ?",
+        (phone_number,),
+    )
+    conv = await row.fetchone()
+
+    if conv:
+        conversation_id = conv["id"]
+        await db.execute(
+            "UPDATE conversations SET contact_name = COALESCE(?, contact_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (contact_name or None, conversation_id),
         )
-        if await existing.fetchone():
-            return {"status": "ignored", "reason": "duplicate"}
-
-        # Get or create conversation
-        row = await db.execute(
-            "SELECT id FROM conversations WHERE phone_number = ?",
-            (phone_number,),
-        )
-        conv = await row.fetchone()
-
-        if conv:
-            conversation_id = conv["id"]
-            await db.execute(
-                "UPDATE conversations SET contact_name = COALESCE(?, contact_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (contact_name or None, conversation_id),
-            )
-        else:
-            cursor = await db.execute(
-                "INSERT INTO conversations (phone_number, contact_name) VALUES (?, ?)",
-                (phone_number, contact_name or None),
-            )
-            conversation_id = cursor.lastrowid
-
-        # Insert message
+    else:
         cursor = await db.execute(
-            "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (?, ?, 'inbound', ?)",
-            (conversation_id, message_id, text),
+            "INSERT INTO conversations (phone_number, contact_name) VALUES (?, ?)",
+            (phone_number, contact_name or None),
         )
-        msg_id = cursor.lastrowid
+        conversation_id = cursor.lastrowid
 
-        # Auto-cancel pending scheduled sends for this conversation
-        cancelled_rows = await db.execute(
-            """UPDATE scheduled_sends
-               SET status = 'cancelled', cancelled_reason = 'client_replied', cancelled_by_message_id = ?
-               WHERE conversation_id = ? AND status = 'pending'
-               RETURNING id""",
-            (msg_id, conversation_id),
+    # Insert message
+    cursor = await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) VALUES (?, ?, 'inbound', ?)",
+        (conversation_id, message_id, text),
+    )
+    msg_id = cursor.lastrowid
+
+    # Auto-cancel pending scheduled sends for this conversation
+    cancelled_rows = await db.execute(
+        """UPDATE scheduled_sends
+           SET status = 'cancelled', cancelled_reason = 'client_replied', cancelled_by_message_id = ?
+           WHERE conversation_id = ? AND status = 'pending'
+           RETURNING id""",
+        (msg_id, conversation_id),
+    )
+    cancelled_sends = await cancelled_rows.fetchall()
+
+    await db.commit()
+
+    # Tag conversation if sender is from a campaign
+    campaign_row = await db.execute(
+        """SELECT campaign_id FROM campaign_contacts
+           WHERE phone_number = ? AND status = 'sent'
+           ORDER BY sent_at DESC LIMIT 1""",
+        (phone_number,),
+    )
+    campaign_contact = await campaign_row.fetchone()
+    if campaign_contact:
+        await db.execute(
+            "UPDATE conversations SET origin_campaign_id = ? WHERE id = ? AND origin_campaign_id IS NULL",
+            (campaign_contact["campaign_id"], conversation_id),
         )
-        cancelled_sends = await cancelled_rows.fetchall()
-
         await db.commit()
 
-        # Tag conversation if sender is from a campaign
-        campaign_row = await db.execute(
-            """SELECT campaign_id FROM campaign_contacts
-               WHERE phone_number = ? AND status = 'sent'
-               ORDER BY sent_at DESC LIMIT 1""",
-            (phone_number,),
-        )
-        campaign_contact = await campaign_row.fetchone()
-        if campaign_contact:
-            await db.execute(
-                "UPDATE conversations SET origin_campaign_id = ? WHERE id = ? AND origin_campaign_id IS NULL",
-                (campaign_contact["campaign_id"], conversation_id),
-            )
-            await db.commit()
-
-        # Broadcast cancellation events for each cancelled scheduled send
-        if cancelled_sends:
-            from app.websocket_manager import manager as ws_manager
-            for cancelled in cancelled_sends:
-                await ws_manager.broadcast(
-                    conversation_id,
-                    {
-                        "type": "scheduled_send_cancelled",
-                        "conversation_id": conversation_id,
-                        "scheduled_send_id": cancelled["id"],
-                        "reason": "client_replied",
-                    },
-                )
-
-        # Trigger draft generation asynchronously
-        from app.services.draft_engine import generate_drafts
-
-        asyncio.create_task(generate_drafts(conversation_id, msg_id))
-
-        # Notify connected WebSocket clients
-        from app.websocket_manager import manager
-
-        await manager.broadcast(
-            conversation_id,
-            {
-                "type": "new_message",
-                "conversation_id": conversation_id,
-                "message": {
-                    "id": msg_id,
+    # Broadcast cancellation events for each cancelled scheduled send
+    if cancelled_sends:
+        from app.websocket_manager import manager as ws_manager
+        for cancelled in cancelled_sends:
+            await ws_manager.broadcast(
+                conversation_id,
+                {
+                    "type": "scheduled_send_cancelled",
                     "conversation_id": conversation_id,
-                    "evolution_message_id": message_id,
-                    "direction": "inbound",
-                    "content": text,
+                    "scheduled_send_id": cancelled["id"],
+                    "reason": "client_replied",
                 },
-            },
-        )
+            )
 
-        return {"status": "ok", "conversation_id": conversation_id, "message_id": msg_id}
-    finally:
-        await db.close()
+    # Trigger draft generation asynchronously
+    from app.services.draft_engine import generate_drafts
+
+    asyncio.create_task(generate_drafts(conversation_id, msg_id))
+
+    # Notify connected WebSocket clients
+    from app.websocket_manager import manager
+
+    await manager.broadcast(
+        conversation_id,
+        {
+            "type": "new_message",
+            "conversation_id": conversation_id,
+            "message": {
+                "id": msg_id,
+                "conversation_id": conversation_id,
+                "evolution_message_id": message_id,
+                "direction": "inbound",
+                "content": text,
+            },
+        },
+    )
+
+    return {"status": "ok", "conversation_id": conversation_id, "message_id": msg_id}

@@ -18,7 +18,7 @@ async def test_annotation_for_edited_message():
     mock_db.commit = AsyncMock()
     mock_db.close = AsyncMock()
 
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db", return_value=mock_db), \
          patch("app.services.strategic_annotation.index_edit_pair") as mock_index:
 
@@ -63,7 +63,7 @@ async def test_annotation_for_accepted_message():
     mock_db.commit = AsyncMock()
     mock_db.close = AsyncMock()
 
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db", return_value=mock_db), \
          patch("app.services.strategic_annotation.index_edit_pair"):
 
@@ -88,7 +88,7 @@ async def test_annotation_for_accepted_message():
 
 @pytest.mark.asyncio
 async def test_annotation_failure_is_non_blocking():
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db") as mock_get_db:
 
         mock_client = AsyncMock()
@@ -115,7 +115,7 @@ async def test_annotation_without_situation_summary():
     mock_db.commit = AsyncMock()
     mock_db.close = AsyncMock()
 
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db", return_value=mock_db), \
          patch("app.services.strategic_annotation.index_edit_pair") as mock_index:
 

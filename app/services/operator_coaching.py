@@ -3,9 +3,8 @@ import json
 import logging
 from datetime import datetime
 
-import anthropic
-
 from app.config import settings
+from app.services.claude_client import get_anthropic_client
 from app.database import get_db
 from app.services.conversation_analysis import analyze_conversation
 
@@ -302,7 +301,7 @@ async def _generate_operator_digest(operator_name: str, assessments: list[dict])
         assessments_text=assessments_text,
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = get_anthropic_client()
     response = await client.messages.create(
         model=settings.claude_model,
         max_tokens=2048,

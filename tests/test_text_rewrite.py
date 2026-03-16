@@ -15,7 +15,7 @@ def make_rewrite_tool_response(text="Texto reescrito"):
 
 @pytest.fixture
 def mock_rewrite_api():
-    with patch("app.services.text_rewrite.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.text_rewrite.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=make_rewrite_tool_response(
@@ -87,7 +87,7 @@ async def test_rewrite_empty_text(client, db, mock_rewrite_api):
 
 @pytest.mark.asyncio
 async def test_rewrite_text_function():
-    with patch("app.services.text_rewrite.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.text_rewrite.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(
             return_value=make_rewrite_tool_response("Texto polido e correto.")
@@ -117,7 +117,7 @@ async def test_rewrite_text_fallback_to_text_block():
     text_block.text = "  Texto via fallback  "
     mock_response.content = [text_block]
 
-    with patch("app.services.text_rewrite.anthropic.AsyncAnthropic") as mock:
+    with patch("app.services.text_rewrite.get_anthropic_client") as mock:
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock.return_value = mock_client

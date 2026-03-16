@@ -1,5 +1,7 @@
 /* Mobile styles */
 
+#ctx-mobile-btn { display: none; }
+
 @media (max-width: 767px) {
   /* Prevent horizontal overflow */
   html, body { overflow-x: hidden; max-width: 100vw; }
@@ -27,8 +29,8 @@
   /* Draft cards as compact pills on mobile */
   #draft-cards { flex-direction: row; gap: 6px; margin-bottom: 6px; }
   .draft-cards-row { flex-direction: row; align-items: center; }
-  .draft-card { flex: 1; max-height: none; overflow: hidden; padding: var(--space-sm) 10px; text-align: center; border-radius: var(--radius-pill); }
-  .draft-card-text { display: none; }
+  .draft-card { flex: 1; max-height: none; overflow: hidden; padding: 8px 10px; border-radius: 12px; }
+  .draft-card-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; margin-top: 4px; }
   .draft-card-header { margin-bottom: 0; justify-content: center; }
   .draft-card-actions { display: none; }
   .draft-card-label { font-size: 12px; }
@@ -55,4 +57,5 @@
   #send-btn, #rewrite-btn, #attach-btn, #schedule-btn { min-height: 44px; flex-shrink: 0; }
   #send-btn { flex: 1; }
   #schedule-btn { flex: 1; }
+  #ctx-mobile-btn { display: inline-block; background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; font-size: 14px; cursor: pointer; margin-left: auto; }
 }

@@ -73,3 +73,31 @@
 .campaign-action-btn.primary:hover { background: var(--color-primary-hover); }
 .campaign-action-btn.danger { color: var(--color-danger); border-color: var(--color-danger-border); }
 .campaign-action-btn.danger:hover { background: var(--color-danger-light); }
+.campaign-action-btn.generate { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
+.campaign-action-btn.generate:hover { background: #bbdefb; }
+.campaign-action-btn.pause { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+.campaign-action-btn.pause:hover { background: #ffcc80; }
+.campaign-action-btn.retry { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
+.campaign-action-btn.retry:hover { background: #ffcdd2; }
+.campaign-action-btn.secondary { background: #fff; border: 1px solid var(--color-border); color: #555; }
+.campaign-action-btn.secondary:hover { background: var(--color-bg-hover); }
+
+/* Variation inline items */
+.campaign-variation-label { font-size: 11px; font-weight: 600; color: #888; }
+.campaign-variation-usage { font-size: 11px; color: #bbb; margin-left: 8px; }
+.campaign-variation-edit-inline { position: absolute; top: 6px; right: 6px; background: none; border: none; cursor: pointer; font-size: 12px; color: #888; }
+.campaign-variation-body { margin-top: 4px; }
+
+/* Contact row */
+.campaign-contact-icon { font-weight: 600; width: 16px; text-align: center; }
+.campaign-contact-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-contact-phone { font-size: 11px; color: #999; flex-shrink: 0; }
+.campaign-contact-status { font-size: 11px; flex-shrink: 0; }
+
+/* Sidebar status label */
+.campaign-sidebar-status { font-weight: 600; }
+
+/* Edit variation inline */
+.campaign-variation-textarea { width: 100%; min-height: 80px; border: 1px solid #1565c0; border-radius: 6px; padding: 8px; font-family: inherit; font-size: 13px; resize: vertical; margin-top: 4px; }
+.campaign-variation-save-btn { padding: 4px 12px; background: var(--color-primary); color: #fff; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 4px; margin-right: 4px; }
+.campaign-variation-cancel-btn { padding: 4px 12px; background: #fff; border: 1px solid var(--color-border); border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 4px; }

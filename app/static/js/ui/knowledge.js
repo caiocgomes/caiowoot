@@ -1,6 +1,7 @@
 import state from '../state.js';
 import { escapeHtml, formatTime } from '../utils.js';
 import { getKnowledgeDocs, getKnowledgeDoc, saveKnowledgeDoc, deleteKnowledgeDoc, createKnowledgeDoc } from '../api.js';
+import { showToast, showConfirm } from './toast.js';
 
 function hideKnowledgePanels() {
   document.getElementById("kb-editor").style.display = "none";
@@ -53,24 +54,25 @@ export async function saveDoc() {
     loadKnowledgeDocs();
   } else {
     const err = await res.json();
-    alert(`Erro ao salvar: ${err.detail || "erro desconhecido"}`);
+    showToast(`Erro ao salvar: ${err.detail || "erro desconhecido"}`, 'error');
   }
 }
 
 export async function deleteDoc() {
   if (!state.currentDocName) return;
-  if (!confirm(`Deletar "${state.currentDocName}"?`)) return;
-
-  const res = await deleteKnowledgeDoc(state.currentDocName);
-  if (res.ok) {
-    state.currentDocName = null;
-    hideKnowledgePanels();
-    document.getElementById("main-empty").style.display = "flex";
-    loadKnowledgeDocs();
-  } else {
-    const err = await res.json();
-    alert(`Erro ao deletar: ${err.detail || "erro desconhecido"}`);
-  }
+  const docName = state.currentDocName;
+  showConfirm(`Deletar "${docName}"?`, async () => {
+    const res = await deleteKnowledgeDoc(docName);
+    if (res.ok) {
+      state.currentDocName = null;
+      hideKnowledgePanels();
+      document.getElementById("main-empty").style.display = "flex";
+      loadKnowledgeDocs();
+    } else {
+      const err = await res.json();
+      showToast(`Erro ao deletar: ${err.detail || "erro desconhecido"}`, 'error');
+    }
+  });
 }
 
 export function showNewDocForm() {
@@ -94,11 +96,11 @@ export async function createDoc() {
   const content = document.getElementById("kb-new-textarea").value;
 
   if (!name) {
-    alert("Nome do documento é obrigatório");
+    showToast("Nome do documento é obrigatório", 'error');
     return;
   }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-    alert("Nome inválido. Use apenas letras minúsculas, números e hífens.");
+    showToast("Nome inválido. Use apenas letras minúsculas, números e hífens.", 'error');
     return;
   }
 
@@ -109,6 +111,6 @@ export async function createDoc() {
     openDoc(name);
   } else {
     const err = await res.json();
-    alert(`Erro ao criar: ${err.detail || "erro desconhecido"}`);
+    showToast(`Erro ao criar: ${err.detail || "erro desconhecido"}`, 'error');
   }
 }

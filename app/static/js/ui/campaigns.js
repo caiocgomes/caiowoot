@@ -5,6 +5,11 @@ import {
   generateVariationsApi, editVariationApi,
   startCampaignApi, pauseCampaignApi, resumeCampaignApi, retryCampaignApi
 } from '../api.js';
+import { showToast, showConfirm } from './toast.js';
+
+// Task 4.5: Module-level constants for campaign status display
+const STATUS_COLORS = { draft: "#888", running: "#25D366", paused: "#f57f17", blocked: "#c62828", completed: "#1565c0" };
+const STATUS_LABELS = { draft: "Rascunho", running: "Enviando", paused: "Pausada", blocked: "Bloqueada", completed: "Concluída" };
 
 export function hideCampaignPanels() {
   document.getElementById("campaign-form").style.display = "none";
@@ -38,7 +43,7 @@ export async function createCampaign() {
   const maxInterval = document.getElementById("campaign-max-interval").value;
 
   if (!name || !baseMessage || !csvInput.files.length) {
-    alert("Preencha nome, mensagem e selecione o CSV.");
+    showToast("Preencha nome, mensagem e selecione o CSV.", 'error');
     return;
   }
 
@@ -55,7 +60,7 @@ export async function createCampaign() {
   const res = await createCampaignApi(formData);
   if (!res.ok) {
     const err = await res.json();
-    alert(err.detail || "Erro ao criar campanha");
+    showToast(err.detail || "Erro ao criar campanha", 'error');
     return;
   }
   const data = await res.json();
@@ -74,13 +79,11 @@ export async function loadCampaigns() {
     div.className = "conv-item" + (c.id === state.currentCampaignId ? " active" : "");
     div.onclick = () => openCampaignDetail(c.id);
 
-    const statusColors = { draft: "#888", running: "#25D366", paused: "#f57f17", blocked: "#c62828", completed: "#1565c0" };
-    const statusLabels = { draft: "Rascunho", running: "Enviando", paused: "Pausada", blocked: "Bloqueada", completed: "Concluída" };
-    const color = statusColors[c.status] || "#888";
-    const label = statusLabels[c.status] || c.status;
+    const color = STATUS_COLORS[c.status] || "#888";
+    const label = STATUS_LABELS[c.status] || c.status;
 
     div.innerHTML = `
-      <span class="conv-time" style="color:${color};font-weight:600;">${label}</span>
+      <span class="conv-time campaign-sidebar-status" style="color:${color};">${label}</span>
       <div class="conv-name">${escapeHtml(c.name)}</div>
       <div class="conv-preview">${c.sent || 0}/${c.total || 0} enviados</div>
     `;
@@ -101,11 +104,9 @@ export async function openCampaignDetail(id) {
   document.getElementById("campaign-detail-name").textContent = data.name;
 
   const statusEl = document.getElementById("campaign-detail-status");
-  const statusLabels = { draft: "Rascunho", running: "Enviando", paused: "Pausada", blocked: "Bloqueada", completed: "Concluída" };
-  const statusColors = { draft: "#888", running: "#25D366", paused: "#f57f17", blocked: "#c62828", completed: "#1565c0" };
-  statusEl.textContent = statusLabels[data.status] || data.status;
-  statusEl.style.background = (statusColors[data.status] || "#888") + "20";
-  statusEl.style.color = statusColors[data.status] || "#888";
+  statusEl.textContent = STATUS_LABELS[data.status] || data.status;
+  statusEl.style.background = (STATUS_COLORS[data.status] || "#888") + "20";
+  statusEl.style.color = STATUS_COLORS[data.status] || "#888";
 
   // Counts
   document.getElementById("campaign-sent-count").textContent = `\u2713 ${data.sent} enviados`;
@@ -116,37 +117,42 @@ export async function openCampaignDetail(id) {
   const pct = Math.round((data.sent / total) * 100);
   document.getElementById("campaign-progress-bar").style.width = pct + "%";
 
-  // Actions
+  // Actions (Task 4.4: use CSS classes instead of inline styles)
   const actionsEl = document.getElementById("campaign-detail-actions");
   actionsEl.innerHTML = "";
-  const btnStyle = "padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #ddd;";
 
   if (data.status === "draft") {
     if (data.variations.length === 0) {
-      actionsEl.innerHTML += `<button onclick="generateVariations(${id})" style="${btnStyle}background:#e3f2fd;color:#1565c0;border-color:#bbdefb;">Gerar variações</button>`;
+      actionsEl.innerHTML += `<button data-campaign-id="${id}" class="campaign-action-btn generate campaign-generate-btn">Gerar variações</button>`;
     } else {
-      actionsEl.innerHTML += `<button onclick="startCampaign(${id})" style="${btnStyle}background:#25D366;color:#fff;border-color:#25D366;">Iniciar</button>`;
+      actionsEl.innerHTML += `<button onclick="startCampaign(${id})" class="campaign-action-btn primary">Iniciar</button>`;
     }
   } else if (data.status === "running") {
-    actionsEl.innerHTML += `<button onclick="pauseCampaign(${id})" style="${btnStyle}background:#fff3e0;color:#e65100;border-color:#ffcc80;">Pausar</button>`;
+    actionsEl.innerHTML += `<button onclick="pauseCampaign(${id})" class="campaign-action-btn pause">Pausar</button>`;
   } else if (data.status === "paused" || data.status === "blocked") {
-    actionsEl.innerHTML += `<button onclick="resumeCampaign(${id})" style="${btnStyle}background:#25D366;color:#fff;border-color:#25D366;">Retomar</button>`;
+    actionsEl.innerHTML += `<button onclick="resumeCampaign(${id})" class="campaign-action-btn primary">Retomar</button>`;
   }
   if (data.failed > 0) {
-    actionsEl.innerHTML += `<button onclick="retryCampaign(${id})" style="${btnStyle}background:#ffebee;color:#c62828;border-color:#ffcdd2;">Reenviar falhos</button>`;
+    actionsEl.innerHTML += `<button onclick="retryCampaign(${id})" class="campaign-action-btn retry">Reenviar falhos</button>`;
   }
 
-  // Variations
+  // Task 4.6: Attach event listener for generate button instead of relying on event.target
+  const genBtn = actionsEl.querySelector('.campaign-generate-btn');
+  if (genBtn) {
+    genBtn.addEventListener('click', () => generateVariations(id, genBtn));
+  }
+
+  // Variations (Task 4.4: use CSS classes)
   const varList = document.getElementById("campaign-variations-list");
   varList.innerHTML = "";
   for (const v of data.variations) {
     const vDiv = document.createElement("div");
-    vDiv.style.cssText = "padding:8px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:6px;font-size:13px;line-height:1.4;white-space:pre-wrap;border:1px solid #eee;position:relative;";
+    vDiv.className = "campaign-variation";
     vDiv.innerHTML = `
-      <span style="font-size:11px;font-weight:600;color:#888;">v${v.variation_index + 1}</span>
-      <span style="font-size:11px;color:#bbb;margin-left:8px;">(${v.usage_count}x usado)</span>
-      ${data.status === "draft" ? `<button onclick="editVariation(${id}, ${v.variation_index}, this)" style="position:absolute;top:6px;right:6px;background:none;border:none;cursor:pointer;font-size:12px;color:#888;">\u270E</button>` : ""}
-      <div style="margin-top:4px;">${escapeHtml(v.variation_text)}</div>
+      <span class="campaign-variation-label">v${v.variation_index + 1}</span>
+      <span class="campaign-variation-usage">(${v.usage_count}x usado)</span>
+      ${data.status === "draft" ? `<button onclick="editVariation(${id}, ${v.variation_index}, this)" class="campaign-variation-edit-inline">\u270E</button>` : ""}
+      <div class="campaign-variation-body">${escapeHtml(v.variation_text)}</div>
     `;
     varList.appendChild(vDiv);
   }
@@ -155,25 +161,29 @@ export async function openCampaignDetail(id) {
   varActions.innerHTML = "";
   if (data.status === "draft") {
     if (data.variations.length > 0) {
-      varActions.innerHTML = `<button onclick="generateVariations(${id})" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;color:#555;">Regenerar variações</button>`;
+      varActions.innerHTML = `<button data-campaign-id="${id}" class="campaign-action-btn secondary campaign-generate-btn">Regenerar variações</button>`;
+      const regenBtn = varActions.querySelector('.campaign-generate-btn');
+      if (regenBtn) {
+        regenBtn.addEventListener('click', () => generateVariations(id, regenBtn));
+      }
     }
   }
 
-  // Contacts
+  // Contacts (Task 4.4: use CSS classes)
   const contactsList = document.getElementById("campaign-contacts-list");
   contactsList.innerHTML = "";
   for (const c of data.contacts) {
     const cDiv = document.createElement("div");
+    cDiv.className = "campaign-contact";
     const statusIcon = c.status === "sent" ? "\u2713" : c.status === "failed" ? "\u2717" : "\u2026";
     const statusColor = c.status === "sent" ? "#2e7d32" : c.status === "failed" ? "#c62828" : "#888";
     const timeStr = c.sent_at ? new Date(c.sent_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
     const errorStr = c.error_message ? ` — ${c.error_message}` : "";
-    cDiv.style.cssText = "padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;align-items:center;gap:8px;";
     cDiv.innerHTML = `
-      <span style="color:${statusColor};font-weight:600;width:16px;text-align:center;">${statusIcon}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || c.phone_number)}</span>
-      <span style="font-size:11px;color:#999;flex-shrink:0;">${c.phone_number}</span>
-      <span style="font-size:11px;color:${statusColor};flex-shrink:0;">${timeStr}${errorStr}</span>
+      <span class="campaign-contact-icon" style="color:${statusColor};">${statusIcon}</span>
+      <span class="campaign-contact-name">${escapeHtml(c.name || c.phone_number)}</span>
+      <span class="campaign-contact-phone">${c.phone_number}</span>
+      <span class="campaign-contact-status" style="color:${statusColor};">${timeStr}${errorStr}</span>
     `;
     contactsList.appendChild(cDiv);
   }
@@ -181,15 +191,15 @@ export async function openCampaignDetail(id) {
   loadCampaigns(); // refresh sidebar list
 }
 
-export async function generateVariations(campaignId) {
-  const btn = event.target;
+// Task 4.6: Accept button element directly instead of relying on implicit event.target
+export async function generateVariations(campaignId, btn) {
   btn.disabled = true;
   btn.textContent = "Gerando...";
   try {
     const res = await generateVariationsApi(campaignId);
     if (!res.ok) {
       const err = await res.json();
-      alert(err.detail || "Erro ao gerar variações");
+      showToast(err.detail || "Erro ao gerar variações", 'error');
       return;
     }
     await openCampaignDetail(campaignId);
@@ -205,15 +215,15 @@ export async function editVariation(campaignId, variationIdx, btnEl) {
 
   const textarea = document.createElement("textarea");
   textarea.value = currentText;
-  textarea.style.cssText = "width:100%;min-height:80px;border:1px solid #1565c0;border-radius:6px;padding:8px;font-family:inherit;font-size:13px;resize:vertical;margin-top:4px;";
+  textarea.className = "campaign-variation-textarea";
 
   const saveBtn = document.createElement("button");
   saveBtn.textContent = "Salvar";
-  saveBtn.style.cssText = "padding:4px 12px;background:#25D366;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;margin-top:4px;margin-right:4px;";
+  saveBtn.className = "campaign-variation-save-btn";
 
   const cancelBtn = document.createElement("button");
   cancelBtn.textContent = "Cancelar";
-  cancelBtn.style.cssText = "padding:4px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;font-size:12px;cursor:pointer;margin-top:4px;";
+  cancelBtn.className = "campaign-variation-cancel-btn";
 
   textDiv.replaceWith(textarea);
   btnEl.style.display = "none";
@@ -228,9 +238,10 @@ export async function editVariation(campaignId, variationIdx, btnEl) {
 }
 
 export async function startCampaign(id) {
-  if (!confirm("Iniciar o envio da campanha?")) return;
-  await startCampaignApi(id);
-  await openCampaignDetail(id);
+  showConfirm("Iniciar o envio da campanha?", async () => {
+    await startCampaignApi(id);
+    await openCampaignDetail(id);
+  });
 }
 
 export async function pauseCampaign(id) {
@@ -244,7 +255,8 @@ export async function resumeCampaign(id) {
 }
 
 export async function retryCampaign(id) {
-  if (!confirm("Reenviar para todos os contatos que falharam?")) return;
-  await retryCampaignApi(id);
-  await openCampaignDetail(id);
+  showConfirm("Reenviar para todos os contatos que falharam?", async () => {
+    await retryCampaignApi(id);
+    await openCampaignDetail(id);
+  });
 }

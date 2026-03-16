@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
 from app.auth import get_operator_from_request, is_admin
-from app.database import get_db
 from app.services.prompt_config import get_all_prompts, update_prompts, reset_prompt
 from app.services.operator_profile import get_profile, upsert_profile
 

@@ -11,6 +11,7 @@ import app.database as db_module
 from app.main import app
 from app.auth import create_session_cookie, COOKIE_NAME
 from app.config import settings
+from app.database import get_db_connection
 
 
 class NonClosingConnection:
@@ -36,12 +37,12 @@ async def db():
     async def mock_get_db():
         return wrapper
 
+    async def override_get_db_connection():
+        yield wrapper
+
+    app.dependency_overrides[get_db_connection] = override_get_db_connection
+
     with patch("app.database.get_db", mock_get_db), \
-         patch("app.routes.webhook.get_db", mock_get_db), \
-         patch("app.routes.conversations.get_db", mock_get_db), \
-         patch("app.routes.messages.get_db", mock_get_db), \
-         patch("app.routes.review.get_db", mock_get_db), \
-         patch("app.routes.settings.get_db", mock_get_db), \
          patch("app.services.draft_engine.get_db", mock_get_db), \
          patch("app.services.learned_rules.get_db", mock_get_db), \
          patch("app.services.prompt_config.get_db", mock_get_db), \
@@ -54,6 +55,7 @@ async def db():
         mock_ws.broadcast = AsyncMock()
         yield conn
 
+    app.dependency_overrides.clear()
     await conn.close()
 
 

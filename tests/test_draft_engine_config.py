@@ -37,8 +37,11 @@ async def db():
          patch("app.services.learned_rules.get_db", mock_get_db), \
          patch("app.services.prompt_config.get_db", mock_get_db), \
          patch("app.services.operator_profile.get_db", mock_get_db), \
+         patch("app.services.prompt_builder.generate_situation_summary", new_callable=AsyncMock, return_value="Primeiro contato."), \
          patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value="Primeiro contato."), \
+         patch("app.services.prompt_builder.retrieve_similar", return_value=[]), \
          patch("app.services.draft_engine.retrieve_similar", return_value=[]), \
+         patch("app.services.prompt_builder.get_active_rules", new_callable=AsyncMock, return_value=[]), \
          patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]), \
          patch("app.websocket_manager.manager") as mock_ws, \
          patch("app.services.draft_engine.save_prompt", return_value="hash123"):
@@ -167,11 +170,10 @@ async def test_generate_drafts_accepts_operator_name(db):
         "suggested_attachment": None,
     }))]
 
-    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_api:
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        mock_api.return_value = mock_client
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=mock_response)
 
+    with patch("app.services.claude_client.get_anthropic_client", return_value=mock_client):
         from app.services.draft_engine import generate_drafts
         await generate_drafts(conv_id, msg_id, operator_name="João")
 

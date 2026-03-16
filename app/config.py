@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     session_max_age: int = 604800  # 7 days in seconds
     operators: str = ""  # comma-separated list of operator names
     admin_operator: str = ""  # operator name with admin privileges (default: first in OPERATORS)
+    evolution_webhook_secret: str = ""  # empty = disabled
     timezone: str = "America/Sao_Paulo"
 
     model_config = {"env_file": ".env"}

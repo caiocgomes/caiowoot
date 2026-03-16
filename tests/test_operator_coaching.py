@@ -108,7 +108,7 @@ async def test_run_analysis_lifecycle(db):
     mock_sonnet.messages.create = AsyncMock(return_value=mock_digest_resp)
 
     with patch("app.services.operator_coaching.analyze_conversation", mock_analysis), \
-         patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_sonnet), \
+         patch("app.services.operator_coaching.get_anthropic_client", return_value=mock_sonnet), \
          patch("app.services.operator_coaching.get_db", return_value=db.__class__.__new__(db.__class__)):
         # We need get_db to return our test db
         from app.services.operator_coaching import _process_analysis
@@ -221,7 +221,7 @@ async def test_generate_digest_valid_json():
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(return_value=_make_llm_response(valid_json))
 
-    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("app.services.operator_coaching.get_anthropic_client", return_value=mock_client):
         from app.services.operator_coaching import _generate_operator_digest
         result = await _generate_operator_digest("Miguel", _sample_assessments())
 
@@ -237,7 +237,7 @@ async def test_generate_digest_json_embedded_in_markdown():
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(return_value=_make_llm_response(messy_response))
 
-    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("app.services.operator_coaching.get_anthropic_client", return_value=mock_client):
         from app.services.operator_coaching import _generate_operator_digest
         result = await _generate_operator_digest("Miguel", _sample_assessments())
 
@@ -252,7 +252,7 @@ async def test_generate_digest_invalid_json_fallback():
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(return_value=_make_llm_response(no_json))
 
-    with patch("app.services.operator_coaching.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("app.services.operator_coaching.get_anthropic_client", return_value=mock_client):
         from app.services.operator_coaching import _generate_operator_digest
         result = await _generate_operator_digest("Miguel", _sample_assessments())
 

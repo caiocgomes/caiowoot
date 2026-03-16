@@ -4,11 +4,12 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+import aiosqlite
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.config import settings
-from app.database import get_db
+from app.database import get_db_connection
 from app.services.campaign_variations import generate_variations
 from app.websocket_manager import manager
 
@@ -18,6 +19,7 @@ router = APIRouter()
 
 @router.post("/campaigns")
 async def create_campaign(
+    db: aiosqlite.Connection = Depends(get_db_connection),
     name: str = Form(...),
     base_message: str = Form(...),
     csv_file: UploadFile = File(...),
@@ -66,144 +68,128 @@ async def create_campaign(
         with open(image_path, "wb") as f:
             f.write(img_data)
 
-    db = await get_db()
-    try:
-        cursor = await db.execute(
-            """INSERT INTO campaigns (name, base_message, image_path, min_interval, max_interval)
-               VALUES (?, ?, ?, ?, ?)""",
-            (name, base_message, image_path, min_interval, max_interval),
+    cursor = await db.execute(
+        """INSERT INTO campaigns (name, base_message, image_path, min_interval, max_interval)
+           VALUES (?, ?, ?, ?, ?)""",
+        (name, base_message, image_path, min_interval, max_interval),
+    )
+    campaign_id = cursor.lastrowid
+
+    for phone, cname in contacts:
+        await db.execute(
+            "INSERT INTO campaign_contacts (campaign_id, phone_number, name) VALUES (?, ?, ?)",
+            (campaign_id, phone, cname),
         )
-        campaign_id = cursor.lastrowid
 
-        for phone, cname in contacts:
-            await db.execute(
-                "INSERT INTO campaign_contacts (campaign_id, phone_number, name) VALUES (?, ?, ?)",
-                (campaign_id, phone, cname),
-            )
+    await db.commit()
 
-        await db.commit()
-
-        return {
-            "status": "ok",
-            "campaign": {
-                "id": campaign_id,
-                "name": name,
-                "status": "draft",
-                "contact_count": len(contacts),
-            },
-        }
-    finally:
-        await db.close()
+    return {
+        "status": "ok",
+        "campaign": {
+            "id": campaign_id,
+            "name": name,
+            "status": "draft",
+            "contact_count": len(contacts),
+        },
+    }
 
 
 @router.get("/campaigns")
-async def list_campaigns():
+async def list_campaigns(db: aiosqlite.Connection = Depends(get_db_connection)):
     """List all campaigns with status counts."""
-    db = await get_db()
-    try:
-        rows = await db.execute(
-            """SELECT c.id, c.name, c.status, c.created_at,
-                      COUNT(cc.id) as total,
-                      SUM(CASE WHEN cc.status = 'sent' THEN 1 ELSE 0 END) as sent,
-                      SUM(CASE WHEN cc.status = 'failed' THEN 1 ELSE 0 END) as failed,
-                      SUM(CASE WHEN cc.status = 'pending' THEN 1 ELSE 0 END) as pending
-               FROM campaigns c
-               LEFT JOIN campaign_contacts cc ON cc.campaign_id = c.id
-               GROUP BY c.id
-               ORDER BY c.created_at DESC"""
-        )
-        campaigns = await rows.fetchall()
-        return [dict(c) for c in campaigns]
-    finally:
-        await db.close()
+    rows = await db.execute(
+        """SELECT c.id, c.name, c.status, c.created_at,
+                  COUNT(cc.id) as total,
+                  SUM(CASE WHEN cc.status = 'sent' THEN 1 ELSE 0 END) as sent,
+                  SUM(CASE WHEN cc.status = 'failed' THEN 1 ELSE 0 END) as failed,
+                  SUM(CASE WHEN cc.status = 'pending' THEN 1 ELSE 0 END) as pending
+           FROM campaigns c
+           LEFT JOIN campaign_contacts cc ON cc.campaign_id = c.id
+           GROUP BY c.id
+           ORDER BY c.created_at DESC"""
+    )
+    campaigns = await rows.fetchall()
+    return [dict(c) for c in campaigns]
 
 
 @router.get("/campaigns/{campaign_id}")
-async def get_campaign(campaign_id: int):
+async def get_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Get campaign detail with contacts and variations."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            """SELECT id, name, status, base_message, image_path,
-                      min_interval, max_interval, created_at
-               FROM campaigns WHERE id = ?""",
-            (campaign_id,),
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
+    row = await db.execute(
+        """SELECT id, name, status, base_message, image_path,
+                  min_interval, max_interval, created_at
+           FROM campaigns WHERE id = ?""",
+        (campaign_id,),
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
 
-        contacts_rows = await db.execute(
-            """SELECT id, phone_number, name, status, error_message, sent_at
-               FROM campaign_contacts
-               WHERE campaign_id = ?
-               ORDER BY id""",
-            (campaign_id,),
-        )
-        contacts = await contacts_rows.fetchall()
+    contacts_rows = await db.execute(
+        """SELECT id, phone_number, name, status, error_message, sent_at
+           FROM campaign_contacts
+           WHERE campaign_id = ?
+           ORDER BY id""",
+        (campaign_id,),
+    )
+    contacts = await contacts_rows.fetchall()
 
-        variations_rows = await db.execute(
-            """SELECT id, variation_index, variation_text, usage_count
-               FROM campaign_variations
-               WHERE campaign_id = ?
-               ORDER BY variation_index""",
-            (campaign_id,),
-        )
-        variations = await variations_rows.fetchall()
+    variations_rows = await db.execute(
+        """SELECT id, variation_index, variation_text, usage_count
+           FROM campaign_variations
+           WHERE campaign_id = ?
+           ORDER BY variation_index""",
+        (campaign_id,),
+    )
+    variations = await variations_rows.fetchall()
 
-        # Counts
-        total = len(contacts)
-        sent = sum(1 for c in contacts if c["status"] == "sent")
-        failed = sum(1 for c in contacts if c["status"] == "failed")
-        pending = sum(1 for c in contacts if c["status"] == "pending")
+    # Counts
+    total = len(contacts)
+    sent = sum(1 for c in contacts if c["status"] == "sent")
+    failed = sum(1 for c in contacts if c["status"] == "failed")
+    pending = sum(1 for c in contacts if c["status"] == "pending")
 
-        return {
-            **dict(campaign),
-            "contacts": [dict(c) for c in contacts],
-            "variations": [dict(v) for v in variations],
-            "total": total,
-            "sent": sent,
-            "failed": failed,
-            "pending": pending,
-        }
-    finally:
-        await db.close()
+    return {
+        **dict(campaign),
+        "contacts": [dict(c) for c in contacts],
+        "variations": [dict(v) for v in variations],
+        "total": total,
+        "sent": sent,
+        "failed": failed,
+        "pending": pending,
+    }
 
 
 @router.post("/campaigns/{campaign_id}/generate-variations")
-async def generate_campaign_variations(campaign_id: int):
+async def generate_campaign_variations(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Generate 8 message variations using Claude."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT id, base_message, status FROM campaigns WHERE id = ?",
-            (campaign_id,),
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        if campaign["status"] != "draft":
-            raise HTTPException(status_code=409, detail="Campaign must be in draft status")
+    row = await db.execute(
+        "SELECT id, base_message, status FROM campaigns WHERE id = ?",
+        (campaign_id,),
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign["status"] != "draft":
+        raise HTTPException(status_code=409, detail="Campaign must be in draft status")
 
-        # Delete existing variations
+    # Delete existing variations
+    await db.execute(
+        "DELETE FROM campaign_variations WHERE campaign_id = ?",
+        (campaign_id,),
+    )
+
+    variations = await generate_variations(campaign["base_message"])
+
+    for i, text in enumerate(variations):
         await db.execute(
-            "DELETE FROM campaign_variations WHERE campaign_id = ?",
-            (campaign_id,),
+            "INSERT INTO campaign_variations (campaign_id, variation_index, variation_text) VALUES (?, ?, ?)",
+            (campaign_id, i, text),
         )
 
-        variations = await generate_variations(campaign["base_message"])
+    await db.commit()
 
-        for i, text in enumerate(variations):
-            await db.execute(
-                "INSERT INTO campaign_variations (campaign_id, variation_index, variation_text) VALUES (?, ?, ?)",
-                (campaign_id, i, text),
-            )
-
-        await db.commit()
-
-        return {"status": "ok", "count": len(variations)}
-    finally:
-        await db.close()
+    return {"status": "ok", "count": len(variations)}
 
 
 class VariationUpdate(BaseModel):
@@ -211,169 +197,149 @@ class VariationUpdate(BaseModel):
 
 
 @router.put("/campaigns/{campaign_id}/variations/{variation_idx}")
-async def update_variation(campaign_id: int, variation_idx: int, req: VariationUpdate):
+async def update_variation(campaign_id: int, variation_idx: int, req: VariationUpdate, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Edit a single variation."""
-    db = await get_db()
-    try:
-        result = await db.execute(
-            """UPDATE campaign_variations
-               SET variation_text = ?
-               WHERE campaign_id = ? AND variation_index = ?""",
-            (req.variation_text, campaign_id, variation_idx),
-        )
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Variation not found")
-        await db.commit()
-        return {"status": "ok"}
-    finally:
-        await db.close()
+    result = await db.execute(
+        """UPDATE campaign_variations
+           SET variation_text = ?
+           WHERE campaign_id = ? AND variation_index = ?""",
+        (req.variation_text, campaign_id, variation_idx),
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Variation not found")
+    await db.commit()
+    return {"status": "ok"}
 
 
 @router.post("/campaigns/{campaign_id}/regenerate-variations")
-async def regenerate_variations(campaign_id: int):
+async def regenerate_variations(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Regenerate all variations."""
-    return await generate_campaign_variations(campaign_id)
+    return await generate_campaign_variations(campaign_id, db)
 
 
 @router.post("/campaigns/{campaign_id}/start")
-async def start_campaign(campaign_id: int):
+async def start_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Start a draft campaign."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        if campaign["status"] != "draft":
-            raise HTTPException(status_code=409, detail="Campaign must be in draft status to start")
+    row = await db.execute(
+        "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign["status"] != "draft":
+        raise HTTPException(status_code=409, detail="Campaign must be in draft status to start")
 
-        # Check variations exist
-        var_row = await db.execute(
-            "SELECT COUNT(*) as cnt FROM campaign_variations WHERE campaign_id = ?",
-            (campaign_id,),
-        )
-        var_count = (await var_row.fetchone())["cnt"]
-        if var_count == 0:
-            raise HTTPException(status_code=409, detail="Generate variations before starting")
+    # Check variations exist
+    var_row = await db.execute(
+        "SELECT COUNT(*) as cnt FROM campaign_variations WHERE campaign_id = ?",
+        (campaign_id,),
+    )
+    var_count = (await var_row.fetchone())["cnt"]
+    if var_count == 0:
+        raise HTTPException(status_code=409, detail="Generate variations before starting")
 
-        await db.execute(
-            "UPDATE campaigns SET status = 'running', next_send_at = datetime('now') WHERE id = ?",
-            (campaign_id,),
-        )
-        await db.commit()
+    await db.execute(
+        "UPDATE campaigns SET status = 'running', next_send_at = datetime('now') WHERE id = ?",
+        (campaign_id,),
+    )
+    await db.commit()
 
-        await manager.broadcast(0, {
-            "type": "campaign_status",
-            "campaign_id": campaign_id,
-            "status": "running",
-        })
+    await manager.broadcast(0, {
+        "type": "campaign_status",
+        "campaign_id": campaign_id,
+        "status": "running",
+    })
 
-        return {"status": "ok"}
-    finally:
-        await db.close()
+    return {"status": "ok"}
 
 
 @router.post("/campaigns/{campaign_id}/pause")
-async def pause_campaign(campaign_id: int):
+async def pause_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Pause a running campaign."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        if campaign["status"] != "running":
-            raise HTTPException(status_code=409, detail="Campaign is not running")
+    row = await db.execute(
+        "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign["status"] != "running":
+        raise HTTPException(status_code=409, detail="Campaign is not running")
 
-        await db.execute(
-            "UPDATE campaigns SET status = 'paused', next_send_at = NULL WHERE id = ?",
-            (campaign_id,),
-        )
-        await db.commit()
+    await db.execute(
+        "UPDATE campaigns SET status = 'paused', next_send_at = NULL WHERE id = ?",
+        (campaign_id,),
+    )
+    await db.commit()
 
-        await manager.broadcast(0, {
-            "type": "campaign_status",
-            "campaign_id": campaign_id,
-            "status": "paused",
-        })
+    await manager.broadcast(0, {
+        "type": "campaign_status",
+        "campaign_id": campaign_id,
+        "status": "paused",
+    })
 
-        return {"status": "ok"}
-    finally:
-        await db.close()
+    return {"status": "ok"}
 
 
 @router.post("/campaigns/{campaign_id}/resume")
-async def resume_campaign(campaign_id: int):
+async def resume_campaign(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Resume a paused or blocked campaign."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        if campaign["status"] not in ("paused", "blocked"):
-            raise HTTPException(status_code=409, detail="Campaign must be paused or blocked to resume")
+    row = await db.execute(
+        "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign["status"] not in ("paused", "blocked"):
+        raise HTTPException(status_code=409, detail="Campaign must be paused or blocked to resume")
 
-        await db.execute(
-            """UPDATE campaigns
-               SET status = 'running', next_send_at = datetime('now'), consecutive_failures = 0
-               WHERE id = ?""",
-            (campaign_id,),
-        )
-        await db.commit()
+    await db.execute(
+        """UPDATE campaigns
+           SET status = 'running', next_send_at = datetime('now'), consecutive_failures = 0
+           WHERE id = ?""",
+        (campaign_id,),
+    )
+    await db.commit()
 
-        await manager.broadcast(0, {
-            "type": "campaign_status",
-            "campaign_id": campaign_id,
-            "status": "running",
-        })
+    await manager.broadcast(0, {
+        "type": "campaign_status",
+        "campaign_id": campaign_id,
+        "status": "running",
+    })
 
-        return {"status": "ok"}
-    finally:
-        await db.close()
+    return {"status": "ok"}
 
 
 @router.post("/campaigns/{campaign_id}/retry")
-async def retry_failed(campaign_id: int):
+async def retry_failed(campaign_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
     """Retry all failed contacts with new variations."""
-    db = await get_db()
-    try:
-        row = await db.execute(
-            "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
-        )
-        campaign = await row.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
+    row = await db.execute(
+        "SELECT id, status FROM campaigns WHERE id = ?", (campaign_id,)
+    )
+    campaign = await row.fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
 
-        # Reset failed contacts to pending
-        await db.execute(
-            """UPDATE campaign_contacts
-               SET status = 'pending', error_message = NULL
-               WHERE campaign_id = ? AND status = 'failed'""",
-            (campaign_id,),
-        )
+    # Reset failed contacts to pending
+    await db.execute(
+        """UPDATE campaign_contacts
+           SET status = 'pending', error_message = NULL
+           WHERE campaign_id = ? AND status = 'failed'""",
+        (campaign_id,),
+    )
 
-        # Set campaign to running
-        await db.execute(
-            """UPDATE campaigns
-               SET status = 'running', next_send_at = datetime('now'), consecutive_failures = 0
-               WHERE id = ?""",
-            (campaign_id,),
-        )
-        await db.commit()
+    # Set campaign to running
+    await db.execute(
+        """UPDATE campaigns
+           SET status = 'running', next_send_at = datetime('now'), consecutive_failures = 0
+           WHERE id = ?""",
+        (campaign_id,),
+    )
+    await db.commit()
 
-        await manager.broadcast(0, {
-            "type": "campaign_status",
-            "campaign_id": campaign_id,
-            "status": "running",
-        })
+    await manager.broadcast(0, {
+        "type": "campaign_status",
+        "campaign_id": campaign_id,
+        "status": "running",
+    })
 
-        return {"status": "ok"}
-    finally:
-        await db.close()
+    return {"status": "ok"}

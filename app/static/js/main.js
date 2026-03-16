@@ -2,9 +2,9 @@ import state from './state.js';
 import { connectWS, on as wsOn } from './ws.js';
 import { notifyInbound, updateTitleBadge, initNotificationButton, setOpenConversation } from './notifications.js';
 
-import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar } from './ui/conversations.js';
+import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar, filterConversations } from './ui/conversations.js';
 import { appendMessage } from './ui/messages.js';
-import { showDrafts, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
+import { showDrafts, showDraftLoading, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
 import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
 import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
 import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
@@ -24,12 +24,14 @@ function switchTab(tab) {
   });
 
   const convList = document.getElementById("conversation-list");
+  const convSearch = document.getElementById("conv-search-wrapper");
   const kbList = document.getElementById("knowledge-list");
   const reviewList = document.getElementById("review-list");
   const campaignList = document.getElementById("campaign-list");
 
   // Hide all sidebar panels
   convList.style.display = "none";
+  if (convSearch) convSearch.style.display = "none";
   kbList.style.display = "none";
   reviewList.style.display = "none";
   campaignList.style.display = "none";
@@ -45,6 +47,7 @@ function switchTab(tab) {
 
   if (tab === "conversations") {
     convList.style.display = "block";
+    if (convSearch) convSearch.style.display = "block";
     if (state.currentConversationId) {
       document.getElementById("chat-wrapper").style.display = "flex";
     } else {
@@ -78,6 +81,7 @@ wsOn("new_message", (data) => {
     appendMessage(data.message);
     if (data.message.direction === "inbound") {
       state.lastTriggerMessageId = data.message.id;
+      showDraftLoading();
     }
   }
 });
@@ -204,3 +208,23 @@ window.classifyConversation = classifyConversation;
 window.updateFunnelProduct = updateFunnelProduct;
 window.updateFunnelStage = updateFunnelStage;
 window.loadSuggestedAttachment = loadSuggestedAttachment;
+window.filterConversations = filterConversations;
+
+// --- Mobile context panel toggle ---
+function toggleMobileContext() {
+  const panel = document.getElementById('context-panel');
+  if (!panel) return;
+  if (panel.style.display === 'flex') {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'flex';
+    panel.style.position = 'fixed';
+    panel.style.top = '0';
+    panel.style.right = '0';
+    panel.style.bottom = '0';
+    panel.style.width = '85vw';
+    panel.style.zIndex = '200';
+    panel.style.boxShadow = '-2px 0 12px rgba(0,0,0,0.2)';
+  }
+}
+window.toggleMobileContext = toggleMobileContext;

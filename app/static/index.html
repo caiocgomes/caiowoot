@@ -18,16 +18,20 @@
 <link rel="stylesheet" href="css/review.css">
 <link rel="stylesheet" href="css/campaigns.css">
 <link rel="stylesheet" href="css/settings.css">
+<link rel="stylesheet" href="css/toast.css">
 <link rel="stylesheet" href="css/mobile.css">
 </head>
 <body>
 <div id="sidebar">
-  <div id="sidebar-header">CaioWoot <button id="notif-btn" class="notif-btn">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes">&#x2699;</button></div>
+  <div id="sidebar-header">CaioWoot <button id="notif-btn" class="notif-btn">Ativar notificações</button><button id="settings-gear" onclick="openSettings()" title="Configuracoes" aria-label="Configurações">&#x2699;</button></div>
   <div id="sidebar-tabs">
     <button class="sidebar-tab active" data-tab="conversations" onclick="switchTab('conversations')">Conversas</button>
     <button class="sidebar-tab" data-tab="knowledge" onclick="switchTab('knowledge')">Conhecimento</button>
     <button class="sidebar-tab" data-tab="review" onclick="switchTab('review')">Aprendizado</button>
     <button class="sidebar-tab" data-tab="campaigns" onclick="switchTab('campaigns')">Campanhas</button>
+  </div>
+  <div id="conv-search-wrapper">
+    <input id="conv-search" type="text" placeholder="Buscar conversa..." oninput="filterConversations(this.value)">
   </div>
   <div id="conversation-list"></div>
   <div id="knowledge-list">
@@ -76,7 +80,7 @@
   </div>
   <div id="review-detail">
     <div id="review-detail-header">
-      <button id="review-back-btn" onclick="reviewGoBack()">&#x2190;</button>
+      <button id="review-back-btn" onclick="reviewGoBack()" aria-label="Voltar">&#x2190;</button>
       <div>
         <h3 id="review-detail-situation"></h3>
         <span class="review-detail-time" id="review-detail-time"></span>
@@ -196,32 +200,32 @@
   </div>
   <div id="chat-wrapper">
     <div id="chat-area">
-      <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()">&#x2190;</button> <span id="chat-header-name"></span></div>
+      <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()" aria-label="Voltar">&#x2190;</button> <span id="chat-header-name"></span><button id="ctx-mobile-btn" onclick="toggleMobileContext()" aria-label="Ver contexto">&#x2139;</button></div>
       <div id="messages"></div>
       <div id="compose">
         <div id="scheduled-pills"></div>
         <div id="draft-cards-container">
           <div class="draft-cards-row">
             <div id="draft-cards"></div>
-            <button id="regen-all-btn" title="Regenerar todas">&#x1F504; Todas</button>
+            <button id="regen-all-btn" title="Regenerar todas" aria-label="Regenerar todas as sugestões">&#x1F504; Todas</button>
           </div>
         </div>
         <div id="instruction-bar">
           <div class="instruction-row">
             <input id="instruction-input" type="text" placeholder="Instrução para a IA (ex: foca no preço, ela é técnica...)">
-            <button id="regen-instruction-btn" title="Regenerar todas com esta instrução">&#x1F504; Regenerar</button>
+            <button id="regen-instruction-btn" title="Regenerar todas com esta instrução" aria-label="Regenerar com instrução">&#x1F504; Regenerar</button>
           </div>
         </div>
         <div id="justification"></div>
         <div id="attachment-bar">
           <span id="attachment-name"></span>
-          <button id="attachment-remove">&times;</button>
+          <button id="attachment-remove" aria-label="Remover anexo">&times;</button>
         </div>
         <div id="quick-attach"></div>
         <div id="draft-area">
           <div id="draft-input-wrapper">
-            <textarea id="draft-input" placeholder="Digite sua mensagem..."></textarea>
-            <button id="clear-draft-btn" type="button" title="Limpar texto">&times;</button>
+            <textarea id="draft-input" placeholder="Selecione um draft acima ou digite sua mensagem..."></textarea>
+            <button id="clear-draft-btn" type="button" title="Limpar texto" aria-label="Limpar texto">&times;</button>
           </div>
           <div id="btn-group">
             <button id="send-btn">Enviar</button>
@@ -241,7 +245,7 @@
               </div>
             </div>
             <button id="rewrite-btn" title="Reescrever texto" disabled>Reescrever</button>
-            <button id="attach-btn" title="Anexar arquivo">&#x1F4CE;</button>
+            <button id="attach-btn" title="Anexar arquivo" aria-label="Anexar arquivo">&#x1F4CE;</button>
             <input type="file" id="attach-file">
           </div>
         </div>
@@ -280,7 +284,7 @@
   <div id="settings-modal-content">
     <div id="settings-modal-header">
       <h3>Configuracoes</h3>
-      <button id="settings-close-btn" onclick="closeSettings()">&times;</button>
+      <button id="settings-close-btn" onclick="closeSettings()" aria-label="Fechar configurações">&times;</button>
     </div>
     <div id="settings-tabs">
       <button class="settings-tab active" data-stab="profile" onclick="switchSettingsTab('profile')">Meu Perfil</button>

@@ -109,7 +109,7 @@ async def test_edit_pair_records_attachment_filename(db, client, mock_evolution_
         "regeneration_count": "0",
     }
 
-    with patch("app.routes.messages.generate_annotation", new_callable=AsyncMock):
+    with patch("app.services.message_sender.generate_annotation", new_callable=AsyncMock):
         res = await client.post("/conversations/1/send", data=data, files=files)
 
     assert res.status_code == 200
@@ -143,7 +143,7 @@ async def test_edit_pair_null_attachment_when_no_file(db, client, mock_evolution
         "regeneration_count": "0",
     }
 
-    with patch("app.routes.messages.generate_annotation", new_callable=AsyncMock):
+    with patch("app.services.message_sender.generate_annotation", new_callable=AsyncMock):
         res = await client.post("/conversations/1/send", data=data)
 
     assert res.status_code == 200
@@ -222,7 +222,7 @@ async def test_attachments_section_in_prompt(db):
     )
     await db.commit()
 
-    with patch("app.services.draft_engine.list_known_attachments", return_value=["handbook-cdo.pdf", "handbook-zero.pdf"]):
+    with patch("app.services.prompt_builder.list_known_attachments", return_value=["handbook-cdo.pdf", "handbook-zero.pdf"]):
         user_content, _, _, _ = await _build_prompt_parts(db, 1)
 
     assert "## Anexos disponíveis" in user_content
@@ -243,7 +243,7 @@ async def test_no_attachments_section_when_empty(db):
     )
     await db.commit()
 
-    with patch("app.services.draft_engine.list_known_attachments", return_value=[]):
+    with patch("app.services.prompt_builder.list_known_attachments", return_value=[]):
         user_content, _, _, _ = await _build_prompt_parts(db, 1)
 
     assert "## Anexos disponíveis" not in user_content
@@ -337,7 +337,7 @@ async def test_annotation_includes_attachment_filename():
     mock_db.commit = AsyncMock()
     mock_db.close = AsyncMock()
 
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db", return_value=mock_db), \
          patch("app.services.strategic_annotation.index_edit_pair"):
 
@@ -372,7 +372,7 @@ async def test_annotation_no_attachment_when_none():
     mock_db.commit = AsyncMock()
     mock_db.close = AsyncMock()
 
-    with patch("app.services.strategic_annotation.anthropic.AsyncAnthropic") as mock_anthropic, \
+    with patch("app.services.strategic_annotation.get_anthropic_client") as mock_anthropic, \
          patch("app.services.strategic_annotation.get_db", return_value=mock_db), \
          patch("app.services.strategic_annotation.index_edit_pair"):
 
@@ -412,17 +412,16 @@ async def test_suggested_attachment_persisted_in_drafts(db):
     )
     await db.commit()
 
-    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_api:
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(side_effect=[
-            make_draft_tool_response("Segue o handbook!", "Cliente pediu.", "handbook-cdo.pdf"),
-            make_draft_tool_response("Claro, vou enviar!", "Pedido direto.", None),
-            make_draft_tool_response("Opa, mando já!", "Casual.", "handbook-cdo.pdf"),
-        ])
-        mock_api.return_value = mock_client
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(side_effect=[
+        make_draft_tool_response("Segue o handbook!", "Cliente pediu.", "handbook-cdo.pdf"),
+        make_draft_tool_response("Claro, vou enviar!", "Pedido direto.", None),
+        make_draft_tool_response("Opa, mando já!", "Casual.", "handbook-cdo.pdf"),
+    ])
 
-        with patch("app.services.draft_engine._validate_suggested_attachment", side_effect=lambda x: x):
-            await generate_drafts(1, 1)
+    with patch("app.services.claude_client.get_anthropic_client", return_value=mock_client), \
+         patch("app.services.claude_client.validate_suggested_attachment", side_effect=lambda x: x):
+        await generate_drafts(1, 1)
 
     rows = await db.execute(
         "SELECT variation_index, suggested_attachment FROM drafts WHERE conversation_id = 1 ORDER BY variation_index"
@@ -485,17 +484,16 @@ async def test_regenerate_draft_persists_suggested_attachment(db):
         )
     await db.commit()
 
-    with patch("app.services.draft_engine.anthropic.AsyncAnthropic") as mock_api:
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(side_effect=[
-            make_draft_tool_response("Novo draft 1", "Razão 1", "handbook-cdo.pdf"),
-            make_draft_tool_response("Novo draft 2", "Razão 2", None),
-            make_draft_tool_response("Novo draft 3", "Razão 3", "handbook-zero.pdf"),
-        ])
-        mock_api.return_value = mock_client
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(side_effect=[
+        make_draft_tool_response("Novo draft 1", "Razão 1", "handbook-cdo.pdf"),
+        make_draft_tool_response("Novo draft 2", "Razão 2", None),
+        make_draft_tool_response("Novo draft 3", "Razão 3", "handbook-zero.pdf"),
+    ])
 
-        with patch("app.services.draft_engine._validate_suggested_attachment", side_effect=lambda x: x):
-            await regenerate_draft(1, 1)
+    with patch("app.services.claude_client.get_anthropic_client", return_value=mock_client), \
+         patch("app.services.claude_client.validate_suggested_attachment", side_effect=lambda x: x):
+        await regenerate_draft(1, 1)
 
     rows = await db.execute(
         "SELECT variation_index, suggested_attachment FROM drafts WHERE conversation_id = 1 ORDER BY variation_index"
