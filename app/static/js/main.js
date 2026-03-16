@@ -3,6 +3,7 @@ import { connectWS, on as wsOn } from './ws.js';
 import { notifyInbound, updateTitleBadge, initNotificationButton, setOpenConversation } from './notifications.js';
 
 import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar, filterConversations } from './ui/conversations.js';
+import { isMobile } from './utils.js';
 import { showToast } from './ui/toast.js';
 import { assumeConversationApi } from './api.js';
 import { appendMessage } from './ui/messages.js';
@@ -36,6 +37,9 @@ function closeToolsMenu() {
 
 function backToConversations() {
   switchTab('conversations');
+  if (isMobile() && state.currentConversationId) {
+    document.body.classList.add('mobile-chat-active');
+  }
 }
 
 // Close tools menu when clicking outside
@@ -183,19 +187,29 @@ wsOn("campaign_progress", (data) => {
   }
 });
 
+function setQualifyingUI(isQualifying) {
+  document.getElementById("qualifying-banner").style.display = isQualifying ? "flex" : "none";
+  document.getElementById("compose").style.display = isQualifying ? "none" : "";
+}
+
 wsOn("conversation_qualified", (data) => {
   loadConversations();
   if (data.conversation_id === state.currentConversationId) {
-    document.getElementById("qualifying-banner").style.display = "none";
-    document.getElementById("compose").style.display = "";
+    setQualifyingUI(false);
+    // Update context panel with summary from qualifying
+    if (data.summary || data.funnel_product || data.funnel_stage) {
+      renderContextPanel(
+        { funnel_product: data.funnel_product, funnel_stage: data.funnel_stage },
+        data.summary,
+      );
+    }
   }
 });
 
 wsOn("conversation_assumed", (data) => {
   loadConversations();
   if (data.conversation_id === state.currentConversationId) {
-    document.getElementById("qualifying-banner").style.display = "none";
-    document.getElementById("compose").style.display = "";
+    setQualifyingUI(false);
   }
 });
 
@@ -280,8 +294,7 @@ async function assumeConversation() {
   if (!state.currentConversationId) return;
   const res = await assumeConversationApi(state.currentConversationId);
   if (res.ok) {
-    document.getElementById("qualifying-banner").style.display = "none";
-    document.getElementById("compose").style.display = "";
+    setQualifyingUI(false);
     showToast("Conversa assumida!", "success");
     loadConversations();
   }

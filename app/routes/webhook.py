@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import settings
 from app.database import get_db_connection
+from app.services.auto_qualifier import auto_qualify_respond
+from app.services.draft_engine import generate_drafts
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +142,8 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
 
     # Route: auto-qualify new leads or generate drafts for qualified conversations
     if not is_qualified:
-        from app.services.auto_qualifier import auto_qualify_respond
         asyncio.create_task(auto_qualify_respond(conversation_id))
     else:
-        from app.services.draft_engine import generate_drafts
         asyncio.create_task(generate_drafts(conversation_id, msg_id))
 
     # Notify connected WebSocket clients

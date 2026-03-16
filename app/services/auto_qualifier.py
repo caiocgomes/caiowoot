@@ -149,11 +149,12 @@ async def auto_qualify_respond(conversation_id: int):
             return
 
         # Save message to DB
-        await db.execute(
+        cursor = await db.execute(
             """INSERT INTO messages (conversation_id, direction, content, sent_by)
                VALUES (?, 'outbound', ?, 'bot')""",
             (conversation_id, message_text),
         )
+        msg_id = cursor.lastrowid
 
         # If ready for handoff
         if ready_for_handoff:
@@ -164,31 +165,57 @@ async def auto_qualify_respond(conversation_id: int):
 
         await db.commit()
 
-        # Broadcast the message
-        msg_row = await db.execute(
-            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1",
-            (conversation_id,),
-        )
-        sent_msg = await msg_row.fetchone()
-
+        # Broadcast the message (use known data instead of re-querying)
         await manager.broadcast(conversation_id, {
             "type": "new_message",
             "conversation_id": conversation_id,
-            "message": dict(sent_msg),
+            "message": {
+                "id": msg_id,
+                "conversation_id": conversation_id,
+                "direction": "outbound",
+                "content": message_text,
+                "sent_by": "bot",
+            },
         })
 
         if ready_for_handoff:
-            # Generate situation summary
+            # Generate situation summary from conversation history
+            summary_result = None
             try:
-                await generate_situation_summary(conversation_id)
+                history = "\n".join(
+                    f"{'Cliente' if m['direction'] == 'inbound' else 'Bot'}: {m['content']}"
+                    for m in messages
+                )
+                # Include the bot's handoff message
+                history += f"\nBot: {message_text}"
+                summary_result = await generate_situation_summary(history, conv["contact_name"] or "")
+
+                # Persist summary in drafts table so GET /conversations/{id} can find it
+                await db.execute(
+                    """INSERT INTO drafts (conversation_id, draft_text, situation_summary, variation_index, approach)
+                       VALUES (?, '', ?, 0, 'qualifying')""",
+                    (conversation_id, summary_result.get("summary", "")),
+                )
+
+                # Update funnel data if the summary provided product/stage
+                if summary_result.get("product") or summary_result.get("stage"):
+                    await db.execute(
+                        "UPDATE conversations SET funnel_product = COALESCE(?, funnel_product), funnel_stage = COALESCE(?, funnel_stage) WHERE id = ?",
+                        (summary_result.get("product"), summary_result.get("stage"), conversation_id),
+                    )
+
+                await db.commit()
             except Exception:
                 logger.exception("Failed to generate summary after qualifying conv %d", conversation_id)
 
             # Broadcast qualification complete
+            situation_summary_text = summary_result.get("summary", "") if summary_result else qualification_summary
             await manager.broadcast(conversation_id, {
                 "type": "conversation_qualified",
                 "conversation_id": conversation_id,
-                "summary": qualification_summary,
+                "summary": situation_summary_text,
+                "funnel_product": summary_result.get("product") if summary_result else None,
+                "funnel_stage": summary_result.get("stage") if summary_result else None,
             })
 
     except Exception:

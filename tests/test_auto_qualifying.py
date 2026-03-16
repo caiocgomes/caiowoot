@@ -1,25 +1,10 @@
 """Tests for auto-qualifying feature."""
-import io
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
-import pytest_asyncio
 
-
-def make_webhook_payload(phone="5511999990001", message="Oi, quero saber sobre o curso"):
-    return {
-        "event": "messages.upsert",
-        "data": {
-            "key": {
-                "remoteJid": f"{phone}@s.whatsapp.net",
-                "fromMe": False,
-                "id": f"MSG-{phone}-001",
-            },
-            "message": {"conversation": message},
-            "pushName": "João",
-        },
-    }
+from tests.conftest import make_webhook_payload
 
 
 def make_qualify_response(message, ready_for_handoff=False, summary=""):
@@ -37,11 +22,11 @@ def make_qualify_response(message, ready_for_handoff=False, summary=""):
 @pytest.mark.asyncio
 async def test_new_conversation_is_not_qualified(client, db):
     """New conversations should have is_qualified = False."""
-    with patch("app.services.auto_qualifier.auto_qualify_respond", new_callable=AsyncMock):
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock):
         res = await client.post("/webhook", json=make_webhook_payload())
         assert res.status_code == 200
 
-    row = await db.execute("SELECT is_qualified FROM conversations WHERE phone_number = '5511999990001'")
+    row = await db.execute("SELECT is_qualified FROM conversations WHERE phone_number = '5511999999999'")
     conv = await row.fetchone()
     assert conv["is_qualified"] == 0
 
@@ -49,7 +34,7 @@ async def test_new_conversation_is_not_qualified(client, db):
 @pytest.mark.asyncio
 async def test_webhook_routes_to_auto_qualifier(client, db):
     """Unqualified conversations should trigger auto_qualify_respond, not generate_drafts."""
-    with patch("app.services.auto_qualifier.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify:
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify:
         res = await client.post("/webhook", json=make_webhook_payload(phone="5511999990002"))
         assert res.status_code == 200
         mock_qualify.assert_called_once()
@@ -64,9 +49,9 @@ async def test_webhook_routes_to_drafts_when_qualified(client, db):
     )
     await db.commit()
 
-    payload = make_webhook_payload(phone="5511888880001", message="Oi")
+    payload = make_webhook_payload(phone="5511888880001", text="Oi")
 
-    with patch("app.services.auto_qualifier.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify:
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify:
         res = await client.post("/webhook", json=payload)
         assert res.status_code == 200
         mock_qualify.assert_not_called()
