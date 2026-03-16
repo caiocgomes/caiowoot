@@ -217,11 +217,16 @@ async def reset_qualifying(request: Request, phone: str, db: aiosqlite.Connectio
 
     conv_id = conv["id"]
 
-    # Reset qualifying flag
-    await db.execute("UPDATE conversations SET is_qualified = 0 WHERE id = ?", (conv_id,))
+    # Delete all messages, drafts, and edit_pairs for this conversation
+    await db.execute("DELETE FROM edit_pairs WHERE conversation_id = ?", (conv_id,))
+    await db.execute("DELETE FROM drafts WHERE conversation_id = ?", (conv_id,))
+    await db.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
 
-    # Delete bot messages so the qualifying flow starts fresh
-    await db.execute("DELETE FROM messages WHERE conversation_id = ? AND sent_by = 'bot'", (conv_id,))
+    # Reset qualifying flag and funnel data
+    await db.execute(
+        "UPDATE conversations SET is_qualified = 0, funnel_product = NULL, funnel_stage = NULL WHERE id = ?",
+        (conv_id,),
+    )
 
     await db.commit()
 
