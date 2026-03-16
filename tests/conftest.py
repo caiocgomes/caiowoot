@@ -49,27 +49,39 @@ async def db():
     async def mock_get_db():
         return wrapper
 
-    with patch("app.database.get_db", mock_get_db), \
-         patch("app.routes.webhook.get_db", mock_get_db), \
-         patch("app.routes.conversations.get_db", mock_get_db), \
-         patch("app.routes.messages.get_db", mock_get_db), \
-         patch("app.routes.review.get_db", mock_get_db), \
-         patch("app.routes.settings.get_db", mock_get_db), \
-         patch("app.services.draft_engine.get_db", mock_get_db), \
-         patch("app.services.learned_rules.get_db", mock_get_db), \
-         patch("app.services.prompt_config.get_db", mock_get_db), \
-         patch("app.services.operator_profile.get_db", mock_get_db), \
-         patch("app.services.strategic_annotation.get_db", mock_get_db), \
-         patch("app.services.send_executor.get_db", mock_get_db), \
-         patch("app.routes.scheduled.get_db", mock_get_db), \
-         patch("app.services.scheduler.get_db", mock_get_db), \
-         patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}) as mock_summary, \
-         patch("app.routes.conversations.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}), \
-         patch("app.services.draft_engine.retrieve_similar", return_value=[]) as mock_retrieval, \
-         patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]) as mock_rules, \
-         patch("app.websocket_manager.manager") as mock_ws, \
-         patch("app.services.draft_engine.save_prompt", return_value="testhash123"):
+    from contextlib import ExitStack
+
+    db_patches = [
+        "app.database.get_db",
+        "app.routes.webhook.get_db",
+        "app.routes.conversations.get_db",
+        "app.routes.messages.get_db",
+        "app.routes.review.get_db",
+        "app.routes.settings.get_db",
+        "app.services.draft_engine.get_db",
+        "app.services.learned_rules.get_db",
+        "app.services.prompt_config.get_db",
+        "app.services.operator_profile.get_db",
+        "app.services.strategic_annotation.get_db",
+        "app.services.send_executor.get_db",
+        "app.routes.scheduled.get_db",
+        "app.services.scheduler.get_db",
+        "app.routes.campaigns.get_db",
+        "app.services.campaign_executor.get_db",
+    ]
+
+    with ExitStack() as stack:
+        for target in db_patches:
+            stack.enter_context(patch(target, mock_get_db))
+
+        stack.enter_context(patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}))
+        stack.enter_context(patch("app.routes.conversations.generate_situation_summary", new_callable=AsyncMock, return_value={"summary": "Primeiro contato genérico.", "product": None, "stage": None}))
+        stack.enter_context(patch("app.services.draft_engine.retrieve_similar", return_value=[]))
+        stack.enter_context(patch("app.services.draft_engine.get_active_rules", new_callable=AsyncMock, return_value=[]))
+        mock_ws = stack.enter_context(patch("app.websocket_manager.manager"))
         mock_ws.broadcast = AsyncMock()
+        stack.enter_context(patch("app.services.draft_engine.save_prompt", return_value="testhash123"))
+
         yield conn
 
     await conn.close()

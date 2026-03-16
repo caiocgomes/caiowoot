@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     funnel_product TEXT,
     funnel_stage TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    origin_campaign_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -104,6 +105,39 @@ CREATE TABLE IF NOT EXISTS scheduled_sends (
     created_by TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    status TEXT DEFAULT 'draft',
+    base_message TEXT NOT NULL DEFAULT '',
+    image_path TEXT,
+    min_interval INTEGER DEFAULT 60,
+    max_interval INTEGER DEFAULT 180,
+    next_send_at TIMESTAMP,
+    consecutive_failures INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS campaign_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+    phone_number TEXT NOT NULL,
+    name TEXT,
+    status TEXT DEFAULT 'pending',
+    variation_id INTEGER,
+    error_message TEXT,
+    sent_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS campaign_variations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+    variation_index INTEGER NOT NULL,
+    variation_text TEXT NOT NULL,
+    usage_count INTEGER DEFAULT 0
 );
 """
 
@@ -216,6 +250,44 @@ MIGRATIONS = [
      "CREATE INDEX IF NOT EXISTS idx_scheduled_sends_status_send_at ON scheduled_sends (status, send_at)"),
     ("suggested_attachment_on_drafts",
      "ALTER TABLE drafts ADD COLUMN suggested_attachment TEXT"),
+    ("campaigns_table", """
+        CREATE TABLE IF NOT EXISTS campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            status TEXT DEFAULT 'draft',
+            base_message TEXT NOT NULL DEFAULT '',
+            image_path TEXT,
+            min_interval INTEGER DEFAULT 60,
+            max_interval INTEGER DEFAULT 180,
+            next_send_at TIMESTAMP,
+            consecutive_failures INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("campaign_contacts_table", """
+        CREATE TABLE IF NOT EXISTS campaign_contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+            phone_number TEXT NOT NULL,
+            name TEXT,
+            status TEXT DEFAULT 'pending',
+            variation_id INTEGER,
+            error_message TEXT,
+            sent_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("campaign_variations_table", """
+        CREATE TABLE IF NOT EXISTS campaign_variations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+            variation_index INTEGER NOT NULL,
+            variation_text TEXT NOT NULL,
+            usage_count INTEGER DEFAULT 0
+        )
+    """),
+    ("origin_campaign_id_on_conversations",
+     "ALTER TABLE conversations ADD COLUMN origin_campaign_id INTEGER"),
 ]
 
 _chroma_client = None

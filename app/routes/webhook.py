@@ -100,6 +100,21 @@ async def receive_webhook(request: Request):
 
         await db.commit()
 
+        # Tag conversation if sender is from a campaign
+        campaign_row = await db.execute(
+            """SELECT campaign_id FROM campaign_contacts
+               WHERE phone_number = ? AND status = 'sent'
+               ORDER BY sent_at DESC LIMIT 1""",
+            (phone_number,),
+        )
+        campaign_contact = await campaign_row.fetchone()
+        if campaign_contact:
+            await db.execute(
+                "UPDATE conversations SET origin_campaign_id = ? WHERE id = ? AND origin_campaign_id IS NULL",
+                (campaign_contact["campaign_id"], conversation_id),
+            )
+            await db.commit()
+
         # Broadcast cancellation events for each cancelled scheduled send
         if cancelled_sends:
             from app.websocket_manager import manager as ws_manager
