@@ -18,6 +18,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; h
 .msg-time { display: block; font-size: 11px; color: var(--color-text-light); text-align: right; margin-top: var(--space-xs); }
 .msg.outbound .msg-time { color: var(--color-msg-outbound-time); }
 
+/* Qualifying banner */
+#qualifying-banner { display: none; padding: 12px 16px; background: #fff3e0; border-top: 1px solid #ffe0b2; align-items: center; gap: 12px; }
+.qualifying-banner-icon { font-size: 24px; flex-shrink: 0; }
+.qualifying-banner-text { flex: 1; font-size: 14px; color: #e65100; font-weight: 500; }
+.qualifying-banner-btn { padding: 8px 16px; background: #fff; border: 1px solid #f57f17; border-radius: 8px; color: #f57f17; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.qualifying-banner-btn:hover { background: #fff3e0; }
+
+/* Bot messages (auto-qualifying) */
+.msg.outbound.bot { background: #e3f2fd; }
+.msg.outbound.bot .msg-time { color: #64b5f6; }
+
 /* Date separator */
 .date-separator { text-align: center; font-size: 12px; color: var(--color-text-muted); margin: var(--space-lg) 0 var(--space-sm); }
 .date-separator span { background: var(--color-bg-separator); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-md); }

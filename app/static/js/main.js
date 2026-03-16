@@ -3,6 +3,8 @@ import { connectWS, on as wsOn } from './ws.js';
 import { notifyInbound, updateTitleBadge, initNotificationButton, setOpenConversation } from './notifications.js';
 
 import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar, filterConversations } from './ui/conversations.js';
+import { showToast } from './ui/toast.js';
+import { assumeConversationApi } from './api.js';
 import { appendMessage } from './ui/messages.js';
 import { showDrafts, showDraftLoading, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
 import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
@@ -181,6 +183,22 @@ wsOn("campaign_progress", (data) => {
   }
 });
 
+wsOn("conversation_qualified", (data) => {
+  loadConversations();
+  if (data.conversation_id === state.currentConversationId) {
+    document.getElementById("qualifying-banner").style.display = "none";
+    document.getElementById("compose").style.display = "";
+  }
+});
+
+wsOn("conversation_assumed", (data) => {
+  loadConversations();
+  if (data.conversation_id === state.currentConversationId) {
+    document.getElementById("qualifying-banner").style.display = "none";
+    document.getElementById("compose").style.display = "";
+  }
+});
+
 wsOn("campaign_status", (data) => {
   if (state.currentTab === "campaigns" && state.currentCampaignId === data.campaign_id) {
     openCampaignDetail(data.campaign_id);
@@ -257,6 +275,18 @@ window.updateFunnelProduct = updateFunnelProduct;
 window.updateFunnelStage = updateFunnelStage;
 window.loadSuggestedAttachment = loadSuggestedAttachment;
 window.filterConversations = filterConversations;
+
+async function assumeConversation() {
+  if (!state.currentConversationId) return;
+  const res = await assumeConversationApi(state.currentConversationId);
+  if (res.ok) {
+    document.getElementById("qualifying-banner").style.display = "none";
+    document.getElementById("compose").style.display = "";
+    showToast("Conversa assumida!", "success");
+    loadConversations();
+  }
+}
+window.assumeConversation = assumeConversation;
 
 // --- Mobile context panel toggle ---
 function toggleMobileContext() {

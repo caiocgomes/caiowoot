@@ -56,5 +56,9 @@
 .ws-dot.connected { background: var(--color-primary); }
 .ws-dot.disconnected { background: var(--color-danger); }
 
+/* Qualifying conversation indicator */
+.conv-item.qualifying { border-left: 3px solid #f57f17; }
+.conv-item.qualifying .conv-name::before { content: "🤖 "; }
+
 /* Sidebar backdrop */
 #sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-bg-overlay); z-index: 99; }

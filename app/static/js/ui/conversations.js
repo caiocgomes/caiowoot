@@ -35,7 +35,8 @@ export function renderConversationList(conversations) {
     const div = document.createElement("div");
     div.className = "conv-item" +
       (conv.id === state.currentConversationId ? " active" : "") +
-      (conv.is_new ? " is-new" : conv.needs_reply ? " needs-reply" : "");
+      (conv.is_new ? " is-new" : conv.needs_reply ? " needs-reply" : "") +
+      (conv.is_qualified === 0 ? " qualifying" : "");
     div.onclick = () => { openConversation(conv.id); closeSidebar(); };
 
     const name = conv.contact_name || conv.phone_number;
@@ -123,6 +124,17 @@ export async function openConversation(id) {
 
   // Render context panel
   renderContextPanel(conv, data.situation_summary);
+
+  // Show/hide qualifying banner
+  const qualBanner = document.getElementById("qualifying-banner");
+  const composeEl = document.getElementById("compose");
+  if (conv.is_qualified === 0) {
+    qualBanner.style.display = "flex";
+    composeEl.style.display = "none";
+  } else {
+    qualBanner.style.display = "none";
+    composeEl.style.display = "";
+  }
 
   // Auto-classify if no funnel data exists yet
   if (!conv.funnel_product && !conv.funnel_stage) {

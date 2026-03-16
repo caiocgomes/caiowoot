@@ -234,6 +234,11 @@
     <div id="chat-area">
       <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()" aria-label="Voltar">&#x2190;</button> <span id="chat-header-name"></span><button id="ctx-mobile-btn" onclick="toggleMobileContext()" aria-label="Ver contexto">&#x2139;</button></div>
       <div id="messages"></div>
+      <div id="qualifying-banner" style="display:none;">
+        <span class="qualifying-banner-icon">🤖</span>
+        <span class="qualifying-banner-text">Robô qualificando esta conversa</span>
+        <button id="assume-btn" onclick="assumeConversation()" class="qualifying-banner-btn">Assumir conversa</button>
+      </div>
       <div id="compose">
         <div id="scheduled-pills"></div>
         <div id="draft-cards-container">

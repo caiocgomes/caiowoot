@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.database import get_db_connection
 from app.services.situation_summary import generate_situation_summary
+from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ async def list_conversations(db: aiosqlite.Connection = Depends(get_db_connectio
     rows = await db.execute("""
         SELECT
             c.id, c.phone_number, c.contact_name, c.status,
-            c.funnel_product, c.funnel_stage,
+            c.is_qualified, c.funnel_product, c.funnel_stage,
             c.created_at, c.updated_at,
             m.content as last_message,
             m.created_at as last_message_at,
@@ -210,3 +211,24 @@ async def classify_conversation(conversation_id: int, db: aiosqlite.Connection =
     except Exception:
         logger.exception("Failed to classify conversation %d", conversation_id)
         raise HTTPException(status_code=500, detail="Classification failed")
+
+
+@router.post("/conversations/{conversation_id}/assume")
+async def assume_conversation(conversation_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
+    """Operator assumes control of a conversation, ending auto-qualification."""
+    row = await db.execute("SELECT id, is_qualified FROM conversations WHERE id = ?", (conversation_id,))
+    conv = await row.fetchone()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conv["is_qualified"]:
+        return {"status": "ok", "already_qualified": True}
+
+    await db.execute("UPDATE conversations SET is_qualified = 1 WHERE id = ?", (conversation_id,))
+    await db.commit()
+
+    await manager.broadcast(conversation_id, {
+        "type": "conversation_assumed",
+        "conversation_id": conversation_id,
+    })
+
+    return {"status": "ok"}

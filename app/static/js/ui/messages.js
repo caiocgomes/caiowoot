@@ -17,7 +17,7 @@ export function appendMessage(msg) {
   }
 
   const div = document.createElement("div");
-  div.className = `msg ${msg.direction}`;
+  div.className = `msg ${msg.direction}` + (msg.sent_by === "bot" ? " bot" : "");
   div.textContent = msg.content;
   if (msg.media_type) {
     const badge = document.createElement("div");

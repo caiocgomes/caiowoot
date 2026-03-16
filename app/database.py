@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     last_read_at TIMESTAMP,
     funnel_product TEXT,
     funnel_stage TEXT,
+    is_qualified INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     origin_campaign_id INTEGER
@@ -338,6 +339,10 @@ MIGRATIONS = [
      "CREATE INDEX IF NOT EXISTS idx_campaign_contacts_camp_status ON campaign_contacts(campaign_id, status)"),
     ("campaign_variations_is_active",
      "ALTER TABLE campaign_variations ADD COLUMN is_active INTEGER DEFAULT 1"),
+    ("conversations_is_qualified",
+     "ALTER TABLE conversations ADD COLUMN is_qualified INTEGER DEFAULT 0"),
+    ("conversations_existing_qualified",
+     "UPDATE conversations SET is_qualified = 1 WHERE is_qualified = 0"),
 ]
 
 _chroma_client = None

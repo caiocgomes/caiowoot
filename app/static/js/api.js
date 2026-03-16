@@ -52,6 +52,10 @@ export async function updateFunnelApi(convId, body) {
   });
 }
 
+export async function assumeConversationApi(convId) {
+  return request(`/conversations/${convId}/assume`, { method: "POST" });
+}
+
 // --- Review ---
 
 export async function getReviewItems() {

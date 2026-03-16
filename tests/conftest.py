@@ -68,6 +68,7 @@ async def db():
         "app.services.send_executor.get_db",
         "app.services.scheduler.get_db",
         "app.services.campaign_executor.get_db",
+        "app.services.auto_qualifier.get_db",
     ]
 
     with ExitStack() as stack:

@@ -70,13 +70,14 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
 
     # Get or create conversation
     row = await db.execute(
-        "SELECT id FROM conversations WHERE phone_number = ?",
+        "SELECT id, is_qualified FROM conversations WHERE phone_number = ?",
         (phone_number,),
     )
     conv = await row.fetchone()
 
     if conv:
         conversation_id = conv["id"]
+        is_qualified = conv["is_qualified"]
         await db.execute(
             "UPDATE conversations SET contact_name = COALESCE(?, contact_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (contact_name or None, conversation_id),
@@ -87,6 +88,7 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
             (phone_number, contact_name or None),
         )
         conversation_id = cursor.lastrowid
+        is_qualified = 0
 
     # Insert message
     cursor = await db.execute(
@@ -136,10 +138,13 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
                 },
             )
 
-    # Trigger draft generation asynchronously
-    from app.services.draft_engine import generate_drafts
-
-    asyncio.create_task(generate_drafts(conversation_id, msg_id))
+    # Route: auto-qualify new leads or generate drafts for qualified conversations
+    if not is_qualified:
+        from app.services.auto_qualifier import auto_qualify_respond
+        asyncio.create_task(auto_qualify_respond(conversation_id))
+    else:
+        from app.services.draft_engine import generate_drafts
+        asyncio.create_task(generate_drafts(conversation_id, msg_id))
 
     # Notify connected WebSocket clients
     from app.websocket_manager import manager
