@@ -23,14 +23,15 @@ QUALIFY_TOOL = {
             },
             "ready_for_handoff": {
                 "type": "boolean",
-                "description": "True se já tem informação suficiente para passar pro atendente humano"
+                "description": "True se todas as perguntas foram bem respondidas e pode passar pro atendente"
             },
-            "qualification_summary": {
-                "type": "string",
-                "description": "Resumo do que foi aprendido sobre o lead até agora"
+            "answers": {
+                "type": "object",
+                "description": "Mapa de cada pergunta configurada para a resposta extraída da conversa. Use o texto da pergunta como chave. Valor null se ainda não respondida, string com a resposta resumida se respondida.",
+                "additionalProperties": {"type": ["string", "null"]}
             }
         },
-        "required": ["message", "ready_for_handoff"]
+        "required": ["message", "ready_for_handoff", "answers"]
     }
 }
 
@@ -48,30 +49,35 @@ async def _build_qualifying_prompt(db, force_handoff=False) -> str:
     greeting_example = greeting_template.replace("{attendant_name}", attendant_name) if greeting_template else ""
     handoff_example = handoff_template.replace("{attendant_name}", attendant_name) if handoff_template else ""
 
-    prompt = f"""Você é um assistente de pré-atendimento do {attendant_name}. Seu papel é:
+    prompt = f"""Você é um entrevistador de pré-atendimento do {attendant_name}. Você é um assistente virtual e deve ser transparente sobre isso.
 
-1. Se apresentar de forma transparente: você é um assistente virtual, o {attendant_name} vai atender em seguida
-2. Coletar informações básicas sobre a pessoa:
+SEU ÚNICO TRABALHO é obter boas respostas para estas perguntas:
 {questions}
-3. Quando tiver informação suficiente (2-3 respostas úteis), fazer o handoff
 
-REGRAS ABSOLUTAS:
-- NUNCA finja ser humano. Você é um assistente virtual.
-- NUNCA fale preço, desconto ou condições de pagamento
-- NUNCA prometa nada sobre o curso
-- NUNCA dê opinião sobre qual curso é melhor
-- Se a pessoa perguntar sobre preço/pagamento, diga que o {attendant_name} vai explicar isso
+COMO ENTREVISTAR:
+- Você pode mandar várias perguntas de uma vez na primeira mensagem
+- Se a pessoa responder de forma rasa ("sim", "trabalho com dados"), aprofunde com subperguntas: "onde? há quanto tempo? que tipo de trabalho?"
+- Se a pessoa pular uma pergunta, volte nela depois
 - Seja breve, informal, amigável. É WhatsApp, não email.
-- Máximo de 4 trocas antes do handoff obrigatório"""
+- Máximo de 4 trocas antes do handoff obrigatório
+
+REGRA MAIS IMPORTANTE - NUNCA RESPONDA PERGUNTAS:
+- Se a pessoa perguntar QUALQUER COISA (preço, conteúdo, certificado, duração, desconto, qualquer coisa), diga algo como "boa pergunta! o {attendant_name} vai te responder sobre isso" e volte para as perguntas de qualificação pendentes
+- Você NÃO sabe nada sobre os cursos. Não tente ajudar, explicar, ou dar contexto
+- Seu papel é APENAS fazer perguntas, NUNCA responder
+
+HANDOFF:
+- Faça handoff quando todas as perguntas tiverem boas respostas
+- No campo "answers" da tool, mapeie cada pergunta para a resposta extraída (ou null se não respondida)"""
 
     if greeting_example:
-        prompt += f"\n- Na primeira mensagem, use algo como: \"{greeting_example}\""
+        prompt += f"\n\nPRIMEIRA MENSAGEM: use algo como \"{greeting_example}\" e já inclua as perguntas"
 
     if handoff_example:
-        prompt += f"\n- Quando fizer handoff, use algo como: \"{handoff_example}\""
+        prompt += f"\nMENSAGEM DE HANDOFF: use algo como \"{handoff_example}\""
 
     if force_handoff:
-        prompt += "\n\nIMPORTANTE: Você já trocou 4 mensagens. Faça o handoff AGORA, independente de ter todas as informações."
+        prompt += "\n\nIMPORTANTE: Você já trocou 4 mensagens. Faça o handoff AGORA, independente de ter todas as respostas. Inclua no answers o que conseguiu e null no que faltou."
 
     return prompt
 
@@ -138,8 +144,19 @@ async def auto_qualify_respond(conversation_id: int):
             return
 
         message_text = tool_result["message"]
-        ready_for_handoff = tool_result.get("ready_for_handoff", False) or force_handoff
-        qualification_summary = tool_result.get("qualification_summary", "")
+        answers = tool_result.get("answers", {})
+        # Handoff if bot says ready, or all answers are non-null, or forced by exchange limit
+        all_answered = answers and all(v is not None for v in answers.values())
+        ready_for_handoff = tool_result.get("ready_for_handoff", False) or all_answered or force_handoff
+
+        # Build structured qualification summary from answers
+        summary_lines = []
+        for question, answer in answers.items():
+            if answer:
+                summary_lines.append(f"- {question}: {answer}")
+            else:
+                summary_lines.append(f"- {question}: Não respondida")
+        qualification_summary = "\n".join(summary_lines) if summary_lines else ""
 
         # Send message via Evolution API
         try:

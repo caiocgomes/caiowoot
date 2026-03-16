@@ -7,12 +7,12 @@ import pytest
 from tests.conftest import make_webhook_payload
 
 
-def make_qualify_response(message, ready_for_handoff=False, summary=""):
+def make_qualify_response(message, ready_for_handoff=False, answers=None):
     """Create a mock Claude response with proper tool_use block."""
     block = SimpleNamespace(
         type="tool_use",
         name="qualify_response",
-        input={"message": message, "ready_for_handoff": ready_for_handoff, "qualification_summary": summary},
+        input={"message": message, "ready_for_handoff": ready_for_handoff, "answers": answers or {}},
     )
     resp = MagicMock()
     resp.content = [block]
@@ -79,7 +79,7 @@ async def test_auto_qualify_sends_bot_message(client, db):
     mock_response = make_qualify_response(
         "Oi Pedro! Sou o assistente virtual. Qual curso te interessa?",
         ready_for_handoff=False,
-        summary="Lead perguntou sobre curso",
+        answers={"Qual curso interessa": None, "Experiência na área": None},
     )
 
     with patch("app.services.auto_qualifier.get_anthropic_client") as mock_client_fn, \
@@ -127,7 +127,7 @@ async def test_auto_qualify_handoff_sets_qualified(client, db):
     mock_response = make_qualify_response(
         "Beleza! Já passei tudo pro atendente. Ele já tem todo o contexto!",
         ready_for_handoff=True,
-        summary="Lead quer curso de LLMs, trabalha com dados há 3 anos",
+        answers={"Qual curso interessa": "O Senhor das LLMs", "Experiência na área": "Trabalha com dados há 3 anos"},
     )
 
     with patch("app.services.auto_qualifier.get_anthropic_client") as mock_client_fn, \
@@ -185,3 +185,141 @@ async def test_conversations_list_includes_is_qualified(client, db):
     diana = [c for c in conversations if c.get("contact_name") == "Diana"]
     assert len(diana) == 1
     assert diana[0]["is_qualified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_qualify_returns_structured_answers(client, db):
+    """Bot should return answers mapped to questions."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
+        ("5511333330001", "Lucas"),
+    )
+    await db.commit()
+    row = await db.execute("SELECT id FROM conversations WHERE phone_number = '5511333330001'")
+    conv = await row.fetchone()
+    conv_id = conv["id"]
+
+    await db.execute(
+        "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', ?)",
+        (conv_id, "Quero o curso de LLMs"),
+    )
+    await db.commit()
+
+    answers = {"Qual curso interessa": "O Senhor das LLMs", "Experiência na área": None, "Objetivo": None}
+    mock_response = make_qualify_response(
+        "Legal! Me conta: você já trabalha com dados ou IA?",
+        ready_for_handoff=False,
+        answers=answers,
+    )
+
+    with patch("app.services.auto_qualifier.get_anthropic_client") as mock_client_fn, \
+         patch("app.services.auto_qualifier.send_text_message", new_callable=AsyncMock), \
+         patch("app.services.auto_qualifier.manager") as mock_ws:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client_fn.return_value = mock_client
+        mock_ws.broadcast = AsyncMock()
+
+        from app.services.auto_qualifier import auto_qualify_respond
+        await auto_qualify_respond(conv_id)
+
+    # Should NOT be qualified yet (has null answers)
+    check = await db.execute("SELECT is_qualified FROM conversations WHERE id = ?", (conv_id,))
+    result = await check.fetchone()
+    assert result["is_qualified"] == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_qualify_handoff_when_all_answers_present(client, db):
+    """Handoff should trigger when all answers are non-null."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
+        ("5511222220001", "Fernanda"),
+    )
+    await db.commit()
+    row = await db.execute("SELECT id FROM conversations WHERE phone_number = '5511222220001'")
+    conv = await row.fetchone()
+    conv_id = conv["id"]
+
+    await db.execute(
+        "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', ?)",
+        (conv_id, "Curso de LLMs, trabalho com ML há 5 anos, quero me atualizar"),
+    )
+    await db.commit()
+
+    answers = {
+        "Qual curso interessa": "O Senhor das LLMs",
+        "Experiência na área": "Trabalha com ML há 5 anos",
+        "Objetivo": "Se atualizar em LLMs",
+    }
+    mock_response = make_qualify_response(
+        "Perfeito! Vou passar pro atendente.",
+        ready_for_handoff=False,  # Bot says false, but all answers are filled
+        answers=answers,
+    )
+
+    with patch("app.services.auto_qualifier.get_anthropic_client") as mock_client_fn, \
+         patch("app.services.auto_qualifier.send_text_message", new_callable=AsyncMock), \
+         patch("app.services.auto_qualifier.manager") as mock_ws, \
+         patch("app.services.auto_qualifier.generate_situation_summary", new_callable=AsyncMock):
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client_fn.return_value = mock_client
+        mock_ws.broadcast = AsyncMock()
+
+        from app.services.auto_qualifier import auto_qualify_respond
+        await auto_qualify_respond(conv_id)
+
+    # Should be qualified (all answers non-null overrides ready_for_handoff=False)
+    check = await db.execute("SELECT is_qualified FROM conversations WHERE id = ?", (conv_id,))
+    result = await check.fetchone()
+    assert result["is_qualified"] == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_qualify_force_handoff_includes_partial_answers(client, db):
+    """Force handoff at 4 exchanges should include partial answers in summary."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
+        ("5511111110001", "Roberto"),
+    )
+    await db.commit()
+    row = await db.execute("SELECT id FROM conversations WHERE phone_number = '5511111110001'")
+    conv = await row.fetchone()
+    conv_id = conv["id"]
+
+    # Simulate 4 bot messages already sent + new inbound
+    for i in range(4):
+        await db.execute(
+            "INSERT INTO messages (conversation_id, direction, content, sent_by) VALUES (?, 'outbound', ?, 'bot')",
+            (conv_id, f"Bot message {i+1}"),
+        )
+        await db.execute(
+            "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', ?)",
+            (conv_id, f"User reply {i+1}"),
+        )
+    await db.commit()
+
+    answers = {"Qual curso interessa": "O Senhor das LLMs", "Experiência na área": None}
+    mock_response = make_qualify_response(
+        "Obrigado! Vou passar pro atendente agora.",
+        ready_for_handoff=False,
+        answers=answers,
+    )
+
+    with patch("app.services.auto_qualifier.get_anthropic_client") as mock_client_fn, \
+         patch("app.services.auto_qualifier.send_text_message", new_callable=AsyncMock), \
+         patch("app.services.auto_qualifier.manager") as mock_ws, \
+         patch("app.services.auto_qualifier.generate_situation_summary", new_callable=AsyncMock):
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_client_fn.return_value = mock_client
+        mock_ws.broadcast = AsyncMock()
+
+        from app.services.auto_qualifier import auto_qualify_respond
+        await auto_qualify_respond(conv_id)
+
+    # Should be qualified (forced by exchange limit)
+    check = await db.execute("SELECT is_qualified FROM conversations WHERE id = ?", (conv_id,))
+    result = await check.fetchone()
+    assert result["is_qualified"] == 1
