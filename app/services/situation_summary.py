@@ -21,7 +21,7 @@ CLASSIFY_TOOL = {
             "product": {
                 "type": ["string", "null"],
                 "enum": ["curso-llm", "curso-zero-a-analista", "curso-cdo", "ai-para-influencers", None],
-                "description": "Identificador do produto de interesse do cliente, ou null se não identificado.",
+                "description": "Identificador do produto. Mapeamento: 'curso-llm' = O Senhor das LLMs, 'curso-zero-a-analista' = Do Zero a Analista (curso para iniciantes), 'curso-cdo' = De Analista a CDO (curso para quem já é analista), 'ai-para-influencers' = AI para Influencers. Use null se não identificado.",
             },
             "stage": {
                 "type": ["string", "null"],
