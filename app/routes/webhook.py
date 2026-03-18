@@ -141,8 +141,9 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
             )
 
     # Route: auto-qualify new leads or generate drafts for qualified conversations
+    logger.info("Routing conv %d: is_qualified=%s", conversation_id, is_qualified)
     if not is_qualified:
-        asyncio.create_task(auto_qualify_respond(conversation_id))
+        asyncio.create_task(auto_qualify_respond(conversation_id, msg_id))
     else:
         asyncio.create_task(generate_drafts(conversation_id, msg_id))
 

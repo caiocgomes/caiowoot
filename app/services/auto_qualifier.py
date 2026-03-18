@@ -87,7 +87,7 @@ HANDOFF:
     return prompt
 
 
-async def auto_qualify_respond(conversation_id: int):
+async def auto_qualify_respond(conversation_id: int, trigger_message_id: int | None = None):
     """Handle auto-qualifying response for a conversation."""
     db = await get_db()
     try:
@@ -97,7 +97,15 @@ async def auto_qualify_respond(conversation_id: int):
             (conversation_id,),
         )
         conv = await row.fetchone()
-        if not conv or conv["is_qualified"]:
+        if not conv:
+            return
+        if conv["is_qualified"]:
+            # Conversation was qualified between webhook read and now.
+            # Generate drafts for the message that triggered this call.
+            logger.info("Conv %d already qualified, falling back to generate_drafts (msg_id=%s)", conversation_id, trigger_message_id)
+            if trigger_message_id:
+                from app.services.draft_engine import generate_drafts
+                await generate_drafts(conversation_id, trigger_message_id)
             return
 
         # Load message history
