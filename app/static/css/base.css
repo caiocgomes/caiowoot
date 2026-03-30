@@ -1,34 +1,101 @@
 /* Reset, body, main layout, message bubbles, date separator */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100dvh; display: flex; background: var(--color-bg); }
+body { font-family: var(--font-family); height: 100dvh; display: flex; background: var(--surface); color: var(--on-surface); }
 
 /* Main area */
 #main { flex: 1; display: flex; flex-direction: column; }
-#main-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--color-text-light); font-size: 16px; }
+#main-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--outline); font-size: 16px; }
 #chat-wrapper { flex: 1; display: none; flex-direction: row; overflow: hidden; }
 #chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#chat-header { padding: var(--space-lg); border-bottom: 1px solid var(--color-border); background: var(--color-bg-card); font-weight: 600; }
-#messages { flex: 1; overflow-y: auto; padding: var(--space-lg); display: flex; flex-direction: column; }
 
-/* Message bubbles */
-.msg { max-width: 70%; padding: 10px 14px; border-radius: var(--radius-lg); margin-bottom: var(--space-sm); font-size: 14px; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; }
-.msg.inbound { background: var(--color-bg-card); border: 1px solid var(--color-border); align-self: flex-start; border-bottom-left-radius: var(--radius-sm); }
-.msg.outbound { background: var(--color-msg-outbound); align-self: flex-end; border-bottom-right-radius: var(--radius-sm); margin-left: auto; }
-.msg-time { display: block; font-size: 11px; color: var(--color-text-light); text-align: right; margin-top: var(--space-xs); }
-.msg.outbound .msg-time { color: var(--color-msg-outbound-time); }
+/* Chat header — Veridian primary with backdrop blur */
+#chat-header {
+  padding: var(--space-lg) var(--space-xl);
+  background: rgba(0, 107, 84, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-weight: 600;
+  color: var(--on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Security banner */
+#security-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(0, 107, 84, 0.05);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+#security-banner .material-symbols-outlined { font-size: 12px; }
+
+#messages { flex: 1; overflow-y: auto; padding: var(--space-xl); display: flex; flex-direction: column; background: var(--surface); }
+
+/* Message bubbles — Veridian tonal layering */
+.msg {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: var(--radius-2xl);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-size-body-md);
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.msg.inbound {
+  background: var(--surface-container-low);
+  align-self: flex-start;
+  border-bottom-left-radius: var(--radius-default);
+}
+.msg.outbound {
+  background: var(--surface-container-lowest);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  align-self: flex-end;
+  border-bottom-right-radius: var(--radius-default);
+  margin-left: auto;
+}
+.msg-time {
+  display: block;
+  font-size: 10px;
+  color: var(--outline);
+  text-align: right;
+  margin-top: var(--space-xs);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+/* Bot/AI messages — glass-ai effect */
+.msg.outbound.bot {
+  background: rgba(0, 107, 84, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 107, 84, 0.1);
+  border-radius: var(--radius-3xl);
+}
+.msg.outbound.bot .msg-time { color: var(--outline); }
+
+/* Copilot badge above AI messages */
+.copilot-badge { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.copilot-badge-icon { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; color: var(--on-primary); }
+.copilot-badge-text { font-size: 10px; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 0.15em; }
 
 /* Qualifying banner */
-#qualifying-banner { display: none; padding: 12px 16px; background: var(--color-warning-bg); border-top: 1px solid var(--color-warning-border); align-items: center; gap: 12px; }
+#qualifying-banner { display: none; padding: 12px 16px; background: var(--color-warning-bg); border-top: 1px solid rgba(245, 127, 23, 0.1); align-items: center; gap: 12px; }
 .qualifying-banner-icon { font-size: 24px; flex-shrink: 0; }
 .qualifying-banner-text { flex: 1; font-size: 14px; color: var(--color-badge-edited-text); font-weight: 500; }
-.qualifying-banner-btn { padding: 8px 16px; background: var(--color-bg-card); border: 1px solid var(--color-warning); border-radius: var(--radius-md); color: var(--color-warning); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.qualifying-banner-btn { padding: 8px 16px; background: var(--surface-container-lowest); border: 1px solid rgba(245, 127, 23, 0.2); border-radius: var(--radius-full); color: var(--color-warning); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .qualifying-banner-btn:hover { background: var(--color-warning-bg); }
 
-/* Bot messages (auto-qualifying) */
-.msg.outbound.bot { background: var(--color-info-light); }
-.msg.outbound.bot .msg-time { color: var(--color-info-subtle); }
-
 /* Date separator */
-.date-separator { text-align: center; font-size: 12px; color: var(--color-text-muted); margin: var(--space-lg) 0 var(--space-sm); }
-.date-separator span { background: var(--color-bg-separator); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-md); }
+.date-separator { text-align: center; font-size: var(--font-size-label-sm); color: var(--outline); margin: var(--space-lg) 0 var(--space-sm); }
+.date-separator span { background: var(--surface-container); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-full); }

@@ -8,7 +8,7 @@ import { showToast } from './ui/toast.js';
 import { assumeConversationApi } from './api.js';
 import { appendMessage } from './ui/messages.js';
 import { showDrafts, showDraftLoading, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
-import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
+import { initCompose, sendMessage, rewriteText, formalizeText, translateText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
 import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
 import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
 import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, hideReviewDetail, reviewGoBack, validateAnnotation, rejectAnnotation, showPromoteModal, closePromoteModal, confirmPromote, afterReviewAction, loadRules, renderRulesList, openRuleDetail, hideRuleDetail, toggleRule, saveRule, cancelRuleEdit } from './ui/review.js';
@@ -288,6 +288,8 @@ window.classifyConversation = classifyConversation;
 window.updateFunnelProduct = updateFunnelProduct;
 window.updateFunnelStage = updateFunnelStage;
 window.loadSuggestedAttachment = loadSuggestedAttachment;
+window.formalizeText = formalizeText;
+window.translateText = translateText;
 window.filterConversations = filterConversations;
 
 async function assumeConversation() {
@@ -319,3 +321,29 @@ function toggleMobileContext() {
   }
 }
 window.toggleMobileContext = toggleMobileContext;
+
+// --- Mobile bottom nav tab switching ---
+window.switchBottomTab = function(tab) {
+  document.querySelectorAll('.bottom-nav-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+    // Set filled icon for active chat tab
+    const icon = t.querySelector('.material-symbols-outlined');
+    if (icon && t.dataset.tab === 'chat') {
+      icon.style.fontVariationSettings = tab === 'chat' ? "'FILL' 1" : "'FILL' 0";
+    }
+  });
+
+  const chatArea = document.getElementById('chat-area');
+  const contextPanel = document.getElementById('context-panel');
+  const placeholder = document.getElementById('bottom-nav-placeholder');
+
+  if (tab === 'chat') {
+    if (chatArea) chatArea.style.display = 'flex';
+    if (contextPanel) contextPanel.style.display = '';
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    if (chatArea) chatArea.style.display = 'none';
+    if (contextPanel) contextPanel.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
+  }
+};

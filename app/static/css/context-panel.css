@@ -1,18 +1,18 @@
-/* Context panel, funnel stages, summary */
+/* Context panel, funnel stages, summary — Veridian tokens */
 
-#context-panel { width: 280px; border-left: 1px solid var(--color-border); background: var(--color-bg-card); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
-#context-panel-header { padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--color-border-light); font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); display: flex; justify-content: space-between; align-items: center; }
-#ctx-classify-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px var(--space-sm); font-size: 11px; color: var(--color-text-muted); cursor: pointer; text-transform: none; font-weight: 400; }
-#ctx-classify-btn:hover { background: var(--color-bg); color: var(--color-text-dim); }
+#context-panel { width: 280px; background: var(--surface-container-low); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; font-family: var(--font-family); }
+#context-panel-header { padding: var(--space-md) var(--space-lg); font-size: var(--font-size-label-sm); font-weight: 600; text-transform: uppercase; color: var(--outline); display: flex; justify-content: space-between; align-items: center; }
+#ctx-classify-btn { background: none; border: none; border-radius: var(--radius-full); padding: 2px var(--space-sm); font-size: var(--font-size-label-sm); color: var(--primary); cursor: pointer; text-transform: none; font-weight: 500; }
+#ctx-classify-btn:hover { background: var(--surface-container); color: var(--primary); }
 #ctx-classify-btn:disabled { opacity: 0.5; cursor: default; }
-.ctx-section { padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--color-border-light); }
-.ctx-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 6px; }
-#ctx-product-select { width: 100%; padding: 6px var(--space-sm); border: 1px solid var(--color-border); border-radius: var(--radius-input); font-size: 13px; font-family: inherit; background: var(--color-bg-card); }
+.ctx-section { padding: var(--space-md) var(--space-lg); }
+.ctx-label { font-size: var(--font-size-label-sm); font-weight: 600; text-transform: uppercase; color: var(--outline); margin-bottom: 6px; }
+#ctx-product-select { width: 100%; padding: 6px var(--space-sm); border: none; border-radius: var(--radius-input); font-size: 13px; font-family: inherit; background: var(--surface-container-low); }
 .ctx-stage-list { list-style: none; }
-.ctx-stage-item { padding: 6px var(--space-sm); font-size: 13px; cursor: pointer; border-radius: var(--radius-input); margin-bottom: 2px; display: flex; align-items: center; gap: var(--space-sm); color: var(--color-text-secondary); }
-.ctx-stage-item:hover { background: var(--color-bg); }
-.ctx-stage-item.active { background: var(--color-bg-success); color: var(--color-success); font-weight: 600; }
-.ctx-stage-dot { width: 8px; height: 8px; border-radius: var(--radius-round); border: 2px solid var(--color-border-muted); flex-shrink: 0; }
-.ctx-stage-item.active .ctx-stage-dot { background: var(--color-primary); border-color: var(--color-primary); }
-.ctx-stage-item.done .ctx-stage-dot { background: #aaa; border-color: #aaa; }
-#ctx-summary-text { font-size: 13px; line-height: 1.5; color: var(--color-text-dim); white-space: pre-wrap; }
+.ctx-stage-item { padding: 6px var(--space-sm); font-size: 13px; cursor: pointer; border-radius: var(--radius-input); margin-bottom: 2px; display: flex; align-items: center; gap: var(--space-sm); color: var(--on-surface-variant); }
+.ctx-stage-item:hover { background: var(--surface-container); }
+.ctx-stage-item.active { background: var(--surface-container-high); color: var(--primary); font-weight: 600; }
+.ctx-stage-dot { width: 8px; height: 8px; border-radius: var(--radius-round); border: 2px solid var(--outline-variant); flex-shrink: 0; }
+.ctx-stage-item.active .ctx-stage-dot { background: var(--primary); border-color: var(--primary); }
+.ctx-stage-item.done .ctx-stage-dot { background: var(--outline); border-color: var(--outline); }
+#ctx-summary-text { font-size: 13px; line-height: 1.5; color: var(--on-surface-variant); white-space: pre-wrap; }

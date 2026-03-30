@@ -2,6 +2,19 @@
 
 #ctx-mobile-btn { display: none; }
 
+/* Bottom navigation */
+#bottom-nav {
+  display: none; /* hidden on desktop */
+}
+#bottom-nav-placeholder {
+  display: none;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--outline);
+  font-size: 16px;
+}
+
 @media (max-width: 767px) {
   /* Prevent horizontal overflow */
   html, body { overflow-x: hidden; max-width: 100vw; }
@@ -29,15 +42,14 @@
 
   .msg { max-width: 90%; }
 
-  /* Draft cards as compact pills on mobile */
-  #draft-cards { flex-direction: row; gap: 6px; margin-bottom: 6px; }
+  /* Draft cards carousel on mobile — keep scroll-snap, narrower cards */
+  #draft-cards { gap: 6px; margin-bottom: 6px; }
   .draft-cards-row { flex-direction: row; align-items: center; }
-  .draft-card { flex: 1; max-height: none; overflow: hidden; padding: 8px 10px; border-radius: 12px; }
+  .draft-card { flex: 0 0 200px; max-height: none; overflow: hidden; padding: 8px 10px; border-radius: 12px; }
   .draft-card-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; margin-top: 4px; }
-  .draft-card-header { margin-bottom: 0; justify-content: center; }
+  .draft-card-header { margin-bottom: 0; }
   .draft-card-actions { display: none; }
   .draft-card-label { font-size: 12px; }
-  .draft-card.selected { border-color: var(--color-primary); background: var(--color-bg-success); }
   #regen-all-btn { padding: var(--space-sm); font-size: 16px; border-radius: var(--radius-pill); min-height: 44px; }
 
   /* Justification compact */
@@ -61,4 +73,48 @@
   #send-btn { flex: 1; }
   #schedule-btn { flex: 1; }
   #ctx-mobile-btn { display: inline-block; background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; font-size: 14px; cursor: pointer; margin-left: auto; }
+
+  /* Bottom navigation */
+  #bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 8px 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+  }
+  .bottom-nav-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(25, 28, 29, 0.3);
+    transition: color 0.2s;
+    padding: 4px 16px;
+  }
+  .bottom-nav-tab.active {
+    color: var(--primary);
+  }
+  .bottom-nav-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-top: 4px;
+  }
+  /* Add padding to compose so content doesn't hide behind bottom nav */
+  body.mobile-chat-active #compose {
+    padding-bottom: calc(var(--space-md) + 70px);
+  }
 }

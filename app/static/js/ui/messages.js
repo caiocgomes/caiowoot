@@ -31,6 +31,15 @@ export function appendMessage(msg) {
     timeEl.textContent = formatTimeShort(msg.created_at);
     div.appendChild(timeEl);
   }
+  // Copilot badge for bot outbound messages
+  if (msg.sent_by === "bot" && msg.direction === "outbound") {
+    const badge = document.createElement("div");
+    badge.className = "copilot-badge";
+    badge.style.alignSelf = "flex-end";
+    badge.innerHTML = '<div class="copilot-badge-icon"><span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:\'FILL\' 1;">auto_awesome</span></div><span class="copilot-badge-text">Veridian Copilot</span>';
+    messagesEl.appendChild(badge);
+  }
+
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }

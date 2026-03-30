@@ -19,7 +19,8 @@ export function showDrafts(drafts, groupId) {
   const cardsEl = document.getElementById("draft-cards");
   cardsEl.innerHTML = "";
 
-  const labels = ["Direta", "Consultiva", "Casual"];
+  const approachLabels = { direct: "Direta", consultive: "Consultiva", casual: "Casual" };
+  const fallbackLabels = ["Direta", "Consultiva", "Casual"];
 
   for (let i = 0; i < drafts.length; i++) {
     const draft = drafts[i];
@@ -32,19 +33,19 @@ export function showDrafts(drafts, groupId) {
 
     const label = document.createElement("span");
     label.className = "draft-card-label";
-    label.textContent = draft.approach || labels[i] || `Opção ${i + 1}`;
+    label.textContent = approachLabels[draft.approach] || fallbackLabels[i] || `Opção ${i + 1}`;
 
     const actions = document.createElement("div");
     actions.className = "draft-card-actions";
 
     const selectBtn = document.createElement("button");
-    selectBtn.title = "Usar esta resposta";
-    selectBtn.textContent = "\u2713";
+    selectBtn.title = "Selecionar";
+    selectBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">check</span>';
     selectBtn.onclick = (e) => { e.stopPropagation(); selectDraft(i); };
 
     const regenBtn = document.createElement("button");
-    regenBtn.title = "Regenerar esta";
-    regenBtn.textContent = "\uD83D\uDD04";
+    regenBtn.title = "Regenerar";
+    regenBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">refresh</span>';
     regenBtn.onclick = (e) => { e.stopPropagation(); regenerateDraft(i); };
 
     actions.appendChild(selectBtn);
@@ -52,7 +53,7 @@ export function showDrafts(drafts, groupId) {
     header.appendChild(label);
     header.appendChild(actions);
 
-    const text = document.createElement("div");
+    const text = document.createElement("p");
     text.className = "draft-card-text";
     text.textContent = draft.draft_text;
 

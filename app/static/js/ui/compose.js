@@ -143,6 +143,54 @@ export async function rewriteText() {
   }
 }
 
+export async function formalizeText() {
+  const textarea = document.getElementById('draft-input');
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('formalize-btn');
+  btn.disabled = true;
+
+  try {
+    const convId = state.currentConversationId;
+    const res = await fetch(`/conversations/${convId}/rewrite`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json();
+    if (data.text) textarea.value = data.text;
+  } catch(e) {
+    console.error('Formalize failed:', e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+export async function translateText() {
+  const textarea = document.getElementById('draft-input');
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('translate-btn');
+  btn.disabled = true;
+
+  try {
+    const convId = state.currentConversationId;
+    const res = await fetch(`/conversations/${convId}/rewrite`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, instruction: 'Traduza para inglês'})
+    });
+    const data = await res.json();
+    if (data.text) textarea.value = data.text;
+  } catch(e) {
+    console.error('Translate failed:', e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 export function initCompose() {
   document.getElementById("send-btn").onclick = sendMessage;
   document.getElementById("draft-input").onkeydown = (e) => {

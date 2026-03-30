@@ -1,69 +1,112 @@
-/* Design Tokens */
+/* Design Tokens — Veridian Copilot */
 :root {
-  /* Colors - Primary */
-  --color-primary: #25D366;
-  --color-primary-hover: #1da851;
-  --color-primary-light: #f0faf0;
+  /* Colors - Veridian Primary (Authority Green) */
+  --primary: #006B54;
+  --primary-container: #006b54;
+  --primary-fixed: #9ef3d6;
+  --primary-fixed-dim: #82d7ba;
+  --on-primary: #ffffff;
+  --on-primary-container: #94e8cb;
+  --on-primary-fixed: #002118;
+  --on-primary-fixed-variant: #00513f;
 
-  /* Colors - Danger */
-  --color-danger: #c62828;
-  --color-danger-light: #ffebee;
+  /* Colors - Intelligence Indigo (AI/Copilot) */
+  --secondary: #4648d4;
+  --secondary-container: #6063ee;
+  --secondary-fixed: #e1e0ff;
+  --secondary-fixed-dim: #c0c1ff;
+  --on-secondary: #ffffff;
+  --on-secondary-container: #fffbff;
+  --on-secondary-fixed: #07006c;
+  --on-secondary-fixed-variant: #2f2ebe;
+
+  /* Colors - Success Green */
+  --tertiary: #005212;
+  --tertiary-container: #1a6c23;
+  --tertiary-fixed: #a3f69c;
+  --tertiary-fixed-dim: #88d982;
+  --on-tertiary: #ffffff;
+  --on-tertiary-container: #98eb92;
+
+  /* Colors - Error */
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error: #ffffff;
+  --on-error-container: #93000a;
+
+  /* Colors - Surface Tiers (tonal layering) */
+  --surface: #f8f9fa;
+  --surface-bright: #f8f9fa;
+  --surface-dim: #d9dadb;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f3f4f5;
+  --surface-container: #edeeef;
+  --surface-container-high: #e7e8e9;
+  --surface-container-highest: #e1e3e4;
+  --surface-tint: #016b54;
+  --surface-variant: #e1e3e4;
+
+  /* Colors - On Surface */
+  --on-surface: #191c1d;
+  --on-surface-variant: #3e4944;
+  --on-background: #191c1d;
+  --background: #f8f9fa;
+
+  /* Colors - Outline */
+  --outline: #6f7a74;
+  --outline-variant: #bec9c3;
+
+  /* Colors - Inverse */
+  --inverse-surface: #2e3132;
+  --inverse-on-surface: #f0f1f2;
+  --inverse-primary: #82d7ba;
+
+  /* Legacy mappings (for existing CSS that references old tokens) */
+  --color-primary: var(--primary);
+  --color-primary-hover: #00513f;
+  --color-primary-light: var(--primary-fixed);
+  --color-danger: var(--error);
+  --color-danger-light: var(--error-container);
   --color-danger-border: #ffcdd2;
-  --color-danger-text: #c00;
-
-  /* Colors - Warning */
+  --color-danger-text: var(--error);
   --color-warning: #f57f17;
   --color-warning-bg: #fffde7;
   --color-warning-border: #fff9c4;
-
-  /* Colors - Info */
   --color-info: #1565c0;
   --color-info-light: #e3f2fd;
   --color-info-border: #bbdefb;
   --color-info-hover: #0d47a1;
   --color-info-subtle: #90caf9;
-
-  /* Colors - Success */
-  --color-success: #2e7d32;
-  --color-bg-success: #e8f5e9;
-  --color-bg-success-dark: #c8e6c9;
-
-  /* Colors - Text */
-  --color-text: #333;
-  --color-text-secondary: #666;
-  --color-text-muted: #595959;
-  --color-text-light: #767676;
-  --color-text-dim: #555;
-  --color-text-placeholder: #bbb;
-
-  /* Colors - Borders */
-  --color-border: #ddd;
-  --color-border-light: #eee;
-  --color-border-muted: #ccc;
-
-  /* Colors - Backgrounds */
-  --color-bg: #f5f5f5;
-  --color-bg-card: #fff;
-  --color-bg-hover: #f0f0f0;
-  --color-bg-active: #e3f2fd;
-  --color-bg-subtle: #fafafa;
-  --color-bg-input: #fffef5;
-  --color-bg-muted: #f9f9f9;
-  --color-bg-separator: #e8e8e8;
-  --color-bg-disabled: #ccc;
+  --color-success: var(--tertiary);
+  --color-bg-success: var(--tertiary-fixed);
+  --color-bg-success-dark: var(--tertiary-fixed-dim);
+  --color-text: var(--on-surface);
+  --color-text-secondary: var(--on-surface-variant);
+  --color-text-muted: var(--outline);
+  --color-text-light: var(--outline);
+  --color-text-dim: var(--on-surface-variant);
+  --color-text-placeholder: var(--outline-variant);
+  --color-border: var(--outline-variant);
+  --color-border-light: var(--surface-container-high);
+  --color-border-muted: var(--outline-variant);
+  --color-bg: var(--surface);
+  --color-bg-card: var(--surface-container-lowest);
+  --color-bg-hover: var(--surface-container-high);
+  --color-bg-active: var(--secondary-fixed);
+  --color-bg-subtle: var(--surface-container-low);
+  --color-bg-input: var(--surface-container-low);
+  --color-bg-muted: var(--surface-container-low);
+  --color-bg-separator: var(--surface-container-high);
+  --color-bg-disabled: var(--outline-variant);
   --color-bg-overlay: rgba(0, 0, 0, 0.4);
-  --color-bg-hover-subtle: #f8f8f8;
-  --color-bg-delete-hover: #fee;
-
-  /* Colors - Messages */
-  --color-msg-outbound: #dcf8c6;
-  --color-msg-outbound-time: #7cb381;
-
-  /* Colors - Review badges */
+  --color-bg-hover-subtle: var(--surface-container-low);
+  --color-bg-delete-hover: var(--error-container);
+  --color-msg-outbound: var(--surface-container-lowest);
+  --color-msg-outbound-time: var(--outline);
   --color-badge-edited-bg: #fff3e0;
   --color-badge-edited-text: #e65100;
-  --color-badge-confirmed-bg: #e8f5e9;
-  --color-badge-confirmed-text: #2e7d32;
+  --color-badge-confirmed-bg: var(--tertiary-fixed);
+  --color-badge-confirmed-text: var(--tertiary);
 
   /* Spacing */
   --space-xs: 4px;
@@ -73,18 +116,31 @@
   --space-xl: 24px;
   --space-xxl: 32px;
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-pill: 20px;
+  /* Border Radius — Veridian scale */
+  --radius-default: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+  /* Legacy mappings */
+  --radius-sm: var(--radius-default);
+  --radius-md: var(--radius-lg);
+  --radius-pill: var(--radius-full);
   --radius-round: 50%;
-  --radius-input: 6px;
+  --radius-input: var(--radius-lg);
 
   /* Font */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 
-  /* Typography */
+  /* Typography — Veridian scale */
+  --font-size-display-sm: 2.25rem;
+  --font-size-headline-lg: 2rem;
+  --font-size-title-lg: 1.375rem;
+  --font-size-body-md: 0.875rem;
+  --font-size-label-sm: 0.6875rem;
+  /* Legacy */
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-md: 13px;
@@ -95,8 +151,22 @@
   --transition-fast: 0.2s;
   --transition-normal: 0.3s;
 
-  /* Shadows */
-  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.15);
-  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-sidebar: 2px 0 12px rgba(0, 0, 0, 0.2);
+  /* Shadows — Veridian ambient (low opacity, high blur) */
+  --shadow-modal: 0 8px 32px rgba(25, 28, 29, 0.12);
+  --shadow-dropdown: 0 4px 16px rgba(25, 28, 29, 0.08);
+  --shadow-sidebar: 2px 0 12px rgba(25, 28, 29, 0.06);
+  --shadow-ambient: 0 1px 24px -4px rgba(25, 28, 29, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Glass AI effect for Copilot messages */
+.glass-ai {
+  background: rgba(0, 107, 84, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Material Symbols defaults */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }

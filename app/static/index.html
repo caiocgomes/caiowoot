@@ -8,7 +8,11 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#006B54">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/sidebar.css">
@@ -232,7 +236,8 @@
   </div>
   <div id="chat-wrapper">
     <div id="chat-area">
-      <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()" aria-label="Voltar">&#x2190;</button> <span id="chat-header-name"></span><button id="ctx-mobile-btn" onclick="toggleMobileContext()" aria-label="Ver contexto">&#x2139;</button></div>
+      <div id="chat-header"><button id="hamburger-btn" onclick="toggleSidebar()" aria-label="Voltar"><span class="material-symbols-outlined">arrow_back</span></button> <span id="chat-header-name"></span><button id="ctx-mobile-btn" onclick="toggleMobileContext()" aria-label="Ver contexto"><span class="material-symbols-outlined">info</span></button></div>
+      <div id="security-banner"><span class="material-symbols-outlined" style="font-size:12px;">lock</span><span>Internal Secure Environment</span></div>
       <div id="messages"></div>
       <div id="qualifying-banner" style="display:none;">
         <span class="qualifying-banner-icon">🤖</span>
@@ -240,17 +245,35 @@
         <button id="assume-btn" onclick="assumeConversation()" class="qualifying-banner-btn">Assumir conversa</button>
       </div>
       <div id="compose">
+        <div id="compose-toolbar">
+          <div class="compose-toolbar-left">
+            <button id="formalize-btn" class="toolbar-btn" onclick="formalizeText()" title="Formalizar">
+              <span class="material-symbols-outlined" style="font-size:18px;">edit_note</span>
+              <span class="toolbar-btn-label">Formalizar</span>
+            </button>
+            <div class="toolbar-divider"></div>
+            <button id="translate-btn" class="toolbar-btn" onclick="translateText()" title="Traduzir">
+              <span class="material-symbols-outlined" style="font-size:18px;">translate</span>
+              <span class="toolbar-btn-label">Traduzir</span>
+            </button>
+          </div>
+          <div class="compose-toolbar-right">
+            <button id="toolbar-attach-btn" class="toolbar-btn" onclick="document.getElementById('attach-file').click()" title="Anexar">
+              <span class="material-symbols-outlined" style="font-size:18px;">attach_file</span>
+            </button>
+          </div>
+        </div>
         <div id="scheduled-pills"></div>
         <div id="draft-cards-container">
           <div class="draft-cards-row">
             <div id="draft-cards"></div>
-            <button id="regen-all-btn" title="Regenerar todas" aria-label="Regenerar todas as sugestões">&#x1F504; Todas</button>
+            <button id="regen-all-btn" title="Regenerar todas" aria-label="Regenerar todas as sugestões"><span class="material-symbols-outlined" style="font-size:16px;">refresh</span> Todas</button>
           </div>
         </div>
         <div id="instruction-bar">
           <div class="instruction-row">
             <input id="instruction-input" type="text" placeholder="Instrução para a IA (ex: foca no preço, ela é técnica...)">
-            <button id="regen-instruction-btn" title="Regenerar todas com esta instrução" aria-label="Regenerar com instrução">&#x1F504; Regenerar</button>
+            <button id="regen-instruction-btn" title="Regenerar todas com esta instrução" aria-label="Regenerar com instrução"><span class="material-symbols-outlined" style="font-size:16px;">refresh</span> Regenerar</button>
           </div>
         </div>
         <div id="justification"></div>
@@ -265,7 +288,7 @@
             <button id="clear-draft-btn" type="button" title="Limpar texto" aria-label="Limpar texto">&times;</button>
           </div>
           <div id="btn-group">
-            <button id="send-btn">Enviar</button>
+            <button id="send-btn"><span class="material-symbols-outlined" style="font-size:20px;font-variation-settings:'FILL' 1;">send</span></button>
             <div id="schedule-wrapper">
               <button id="schedule-btn">Agendar</button>
               <div id="schedule-dropdown">
@@ -282,7 +305,7 @@
               </div>
             </div>
             <button id="rewrite-btn" title="Reescrever texto" disabled>Reescrever</button>
-            <button id="attach-btn" title="Anexar arquivo" aria-label="Anexar arquivo">&#x1F4CE;</button>
+            <button id="attach-btn" title="Anexar arquivo" aria-label="Anexar arquivo"><span class="material-symbols-outlined">attach_file</span></button>
             <input type="file" id="attach-file">
           </div>
         </div>
@@ -314,6 +337,23 @@
         <div class="ctx-label">Resumo</div>
         <div id="ctx-summary-text">Sem resumo ainda</div>
       </div>
+    </div>
+    <nav id="bottom-nav">
+      <button class="bottom-nav-tab active" data-tab="chat" onclick="switchBottomTab('chat')">
+        <span class="material-symbols-outlined" style="font-size:24px;font-variation-settings:'FILL' 1;">chat_bubble</span>
+        <span class="bottom-nav-label">Chat</span>
+      </button>
+      <button class="bottom-nav-tab" data-tab="insights" onclick="switchBottomTab('insights')">
+        <span class="material-symbols-outlined" style="font-size:24px;">auto_awesome</span>
+        <span class="bottom-nav-label">Insights</span>
+      </button>
+      <button class="bottom-nav-tab" data-tab="history" onclick="switchBottomTab('history')">
+        <span class="material-symbols-outlined" style="font-size:24px;">history</span>
+        <span class="bottom-nav-label">History</span>
+      </button>
+    </nav>
+    <div id="bottom-nav-placeholder" style="display:none;">
+      <p>Em breve</p>
     </div>
   </div>
 </div>
