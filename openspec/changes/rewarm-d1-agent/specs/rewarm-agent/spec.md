@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Query de conversas candidatas a reesquentamento D-1
-O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as conversas que, no momento do clique, satisfazem todos os critérios: `funnel_product = 'CDO'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, existe ao menos uma mensagem em `messages` cuja `DATE(created_at)` é igual a `DATE('now','-1 day')`, e não existe nenhum draft com `sent_at IS NULL` associado à conversa.
+O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as conversas que, no momento do clique, satisfazem todos os critérios: `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, existe ao menos uma mensagem em `messages` cuja `DATE(created_at)` é igual a `DATE('now','-1 day')`.
 
 #### Scenario: Conversa elegível é incluída
 - **GIVEN** conversa com `funnel_product='CDO'`, `funnel_stage='handbook_sent'`, ao menos uma mensagem criada ontem, e sem draft pendente
@@ -23,10 +23,10 @@ O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as c
 - **WHEN** o sistema executa a query de candidatas
 - **THEN** a conversa SHALL NOT aparecer no resultado
 
-#### Scenario: Conversa com draft pendente é excluída
-- **GIVEN** conversa que satisfaz product/stage/mensagem-D-1 mas possui um draft com `sent_at IS NULL`
+#### Scenario: Conversa com draft pendente continua incluída
+- **GIVEN** conversa que satisfaz product/stage/mensagem-D-1 e possui um draft com `status='pending'`
 - **WHEN** o sistema executa a query de candidatas
-- **THEN** a conversa SHALL NOT aparecer no resultado
+- **THEN** a conversa SHALL aparecer no resultado (safeguard removido por decisão do operador em 2026-04-15)
 
 #### Scenario: Conversa já purchased é excluída
 - **GIVEN** conversa com `funnel_stage='purchased'` mesmo tendo sido `handbook_sent` ou `link_sent` em algum momento

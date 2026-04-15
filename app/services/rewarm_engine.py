@@ -71,7 +71,7 @@ async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
     """Seleciona conversas candidatas a reesquentamento D-1.
 
     Critério: funnel_product=CDO, funnel_stage em (handbook_sent, link_sent),
-    existe mensagem em D-1, sem draft pendente.
+    existe mensagem em D-1.
     """
     cursor = await db.execute(
         """
@@ -83,11 +83,6 @@ async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
               SELECT 1 FROM messages m
               WHERE m.conversation_id = c.id
                 AND DATE(m.created_at) = DATE('now', '-1 day')
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM drafts d
-              WHERE d.conversation_id = c.id
-                AND d.status = 'pending'
           )
         ORDER BY c.id
         """,

@@ -77,10 +77,11 @@ async def test_query_excludes_conversation_without_yesterday_message(db):
 
 
 @pytest.mark.asyncio
-async def test_query_excludes_conversation_with_pending_draft(db):
-    await _seed_conversation(db, pending_draft=True)
+async def test_query_includes_conversation_with_pending_draft(db):
+    """Safeguard de pending draft foi removido — conversa continua elegível."""
+    conv_id = await _seed_conversation(db, pending_draft=True)
     results = await select_rewarm_candidates(db)
-    assert results == []
+    assert any(r["id"] == conv_id for r in results)
 
 
 @pytest.mark.asyncio
@@ -108,17 +109,13 @@ async def test_query_returns_contact_fields(db):
 
 
 @pytest.mark.asyncio
-async def test_query_treats_sent_draft_as_not_pending(db):
-    """A draft with sent_at NOT NULL should not block the conversation."""
+async def test_query_ignores_any_draft_status(db):
+    """Filtro de drafts foi removido inteiro — status do draft não afeta elegibilidade."""
     conv_id = await _seed_conversation(db)
-    # Add a sent draft
     trigger_cursor = await db.execute(
         "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', 'trigger')",
         (conv_id,),
     )
-    # drafts table doesn't have sent_at column - status='sent' is the signal.
-    # Check implementation decision: we filter by status != 'pending' OR by sent_at.
-    # For now, the test documents the expectation: a 'sent' status draft should not block.
     await db.execute(
         "INSERT INTO drafts (conversation_id, trigger_message_id, draft_text, status) VALUES (?, ?, 'old', 'sent')",
         (conv_id, trigger_cursor.lastrowid),

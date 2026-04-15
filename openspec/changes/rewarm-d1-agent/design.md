@@ -22,7 +22,7 @@ O CaioWoot já tem todas as peças para construir esse agente: modelo de dados d
 ## Decisions
 
 ### D1 — Filtro SQL "sem histórico de transição"
-Query candidata filtra por `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, presença de pelo menos uma mensagem em `DATE('now','-1 day')`, ausência de draft pendente (sent_at IS NULL).
+Query candidata filtra por `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, presença de pelo menos uma mensagem em `DATE('now','-1 day')`. **O safeguard de "sem draft pendente" foi removido por decisão do operador** (2026-04-15): estava excluindo conversas válidas em produção. Se o agente mandar rewarm em conversa com draft pendente, o pior caso é um draft ficar obsoleto — o operador descarta na tela. O ganho em cobertura compensou.
 
 **Alternativa considerada:** tabela `funnel_stage_transitions` para registrar a data exata da transição. Rejeitada — aumenta escopo (migração + hooks em dois lugares) sem benefício material dado que a heurística "houve mensagem em D-1 + stage atual é handbook/link" captura o alvo real. Se ficar impreciso com uso, criar tabela depois.
 
@@ -51,8 +51,8 @@ O endpoint `/rewarm/preview` roda a geração dos agentes em paralelo e devolve 
 
 **Alternativa considerada:** tabela `rewarm_queue` com TTL. Rejeitada — essa feature "vai morrer" em 4 dias virando automática; persistir fila é over-engineering.
 
-### D7 — Safeguard contra encavalamento
-O filtro SQL inclui `NOT EXISTS drafts pendentes`. Isso cobre dois casos: (a) duplo clique do operador antes do primeiro batch ser enviado, (b) conversa com mensagem inbound recente que o operador ainda não respondeu (há um draft aguardando decisão). Em ambos, o rewarm pularia por cima do fluxo de engajamento ativo.
+### D7 — ~~Safeguard contra encavalamento~~ (removido)
+Versão original filtrava `NOT EXISTS drafts pendentes` para evitar duplo clique e encavalamento com engajamento ativo. **Removido em 2026-04-15** após rodar em produção — estava excluindo conversas válidas (alguns leads CDO acumulam drafts pending mesmo sendo alvo legítimo de rewarm). Duplo clique segue coberto pelo loading state no front; encavalamento fica como responsabilidade do operador na tela de revisão (ele vê o histórico e decide).
 
 ### D8 — Telemetria via análise geral existente
 Mensagens enviadas pelo agente ficam em `messages` com `direction='outbound'` e `sent_by` identificando origem do rewarm (ex: `sent_by='rewarm_agent'` ou `sent_by='rewarm_reviewed'`). O `conversation_analysis.py` já varre conversas e avalia qualidade; basta estendê-lo minimamente para considerar mensagens de rewarm no agregado. Sem dashboard novo.
