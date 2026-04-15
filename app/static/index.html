@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="css/campaigns.css">
 <link rel="stylesheet" href="css/settings.css">
 <link rel="stylesheet" href="css/toast.css">
+<link rel="stylesheet" href="css/rewarm.css">
 <link rel="stylesheet" href="css/mobile.css">
 </head>
 <body>
@@ -75,7 +76,28 @@
   </div>
   <div id="campaign-list">
     <button id="campaign-new-btn" onclick="showCampaignForm()">+ Nova campanha</button>
+    <button id="rewarm-d1-btn" onclick="startRewarmD1()">Reesquentar D-1</button>
     <div id="campaign-items"></div>
+  </div>
+</div>
+
+<div id="rewarm-modal" class="rewarm-modal" hidden>
+  <div class="rewarm-modal-backdrop" onclick="closeRewarmModal()"></div>
+  <div class="rewarm-modal-panel" role="dialog" aria-modal="true" aria-labelledby="rewarm-modal-title">
+    <div class="rewarm-modal-header">
+      <h2 id="rewarm-modal-title">Reesquentar D-1</h2>
+      <button class="rewarm-modal-close" onclick="closeRewarmModal()" aria-label="Fechar">&times;</button>
+    </div>
+    <div id="rewarm-modal-loading" class="rewarm-modal-loading">Gerando sugestões…</div>
+    <div id="rewarm-modal-empty" class="rewarm-modal-empty" hidden>Nenhuma conversa elegível para reesquentamento no momento.</div>
+    <div id="rewarm-modal-body" class="rewarm-modal-body" hidden>
+      <div id="rewarm-send-list"></div>
+      <div id="rewarm-skip-list"></div>
+    </div>
+    <div id="rewarm-modal-footer" class="rewarm-modal-footer" hidden>
+      <span id="rewarm-modal-count"></span>
+      <button id="rewarm-send-all-btn" onclick="sendRewarmBatch()">Enviar todos</button>
+    </div>
   </div>
 </div>
 <div id="sidebar-backdrop" onclick="closeSidebar()"></div>

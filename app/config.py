@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     admin_operator: str = ""  # operator name with admin privileges (default: first in OPERATORS)
     evolution_webhook_secret: str = ""  # empty = disabled
     timezone: str = "America/Sao_Paulo"
+    rewarm_auto_send: bool = False  # quando True, pipeline de rewarm envia sem revisão humana
 
     model_config = {"env_file": ".env"}
 

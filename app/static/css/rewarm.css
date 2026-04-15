@@ -1,0 +1,214 @@
+/* Rewarm D-1 — botão na sidebar + modal de revisão */
+
+#rewarm-d1-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 var(--space-lg) var(--space-md);
+  padding: 10px;
+  background: var(--color-bg-card);
+  border: 1px dashed var(--color-border-muted);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+#rewarm-d1-btn:hover {
+  background: var(--color-bg-hover-subtle);
+  border-color: var(--color-text-light);
+}
+
+/* Modal */
+.rewarm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rewarm-modal[hidden] { display: none; }
+
+.rewarm-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.rewarm-modal-panel {
+  position: relative;
+  width: min(720px, calc(100% - 32px));
+  max-height: calc(100vh - 64px);
+  background: var(--color-bg, #fff);
+  border-radius: var(--radius-lg, 12px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+}
+
+.rewarm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+.rewarm-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.rewarm-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.rewarm-modal-loading,
+.rewarm-modal-empty {
+  padding: var(--space-xxl, 48px) var(--space-xl);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.rewarm-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.rewarm-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-bg);
+}
+
+.rewarm-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.rewarm-card-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.rewarm-card-stage {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--primary-fixed, #9ef3d6);
+  color: var(--on-primary-fixed, #002118);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rewarm-card-reason {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.rewarm-card-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.rewarm-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rewarm-card-remove {
+  background: none;
+  border: 1px solid var(--color-border);
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+.rewarm-card-remove:hover {
+  background: var(--color-bg-hover-subtle);
+}
+
+.rewarm-skip-title {
+  margin-top: var(--space-lg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.rewarm-skip-row {
+  display: flex;
+  gap: var(--space-md);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+}
+
+.rewarm-skip-name {
+  min-width: 120px;
+  font-weight: 500;
+}
+
+.rewarm-skip-reason { flex: 1; font-style: italic; }
+
+.rewarm-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-xl);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+
+#rewarm-modal-count {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+#rewarm-send-all-btn {
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+#rewarm-send-all-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+#rewarm-send-all-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

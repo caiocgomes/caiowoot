@@ -9,7 +9,7 @@ from starlette.requests import Request
 
 from app.auth import AuthMiddleware, validate_session_cookie, COOKIE_NAME
 from app.database import init_db
-from app.routes import admin, attachments, campaigns, conversations, health, knowledge, login, messages, review, rules, scheduled, settings, webhook
+from app.routes import admin, attachments, campaigns, conversations, health, knowledge, login, messages, review, rewarm, rules, scheduled, settings, webhook
 from app.services.campaign_executor import campaign_executor_loop
 from app.services.scheduler import scheduler_loop
 from app.websocket_manager import manager
@@ -61,6 +61,7 @@ app.include_router(attachments.router)
 app.include_router(scheduled.router)
 app.include_router(admin.router)
 app.include_router(campaigns.router)
+app.include_router(rewarm.router)
 app.include_router(health.router)
 
 
