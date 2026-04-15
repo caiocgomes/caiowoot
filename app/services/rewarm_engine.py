@@ -71,7 +71,8 @@ async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
     """Seleciona conversas candidatas a reesquentamento D-1.
 
     Critério: funnel_product=CDO, funnel_stage em (handbook_sent, link_sent),
-    existe mensagem em D-1.
+    última mensagem da conversa foi em D-1 (se teve mensagem hoje, a conversa
+    está ativa e fica fora — rewarm só faz sentido pra conversas que esfriaram).
     """
     cursor = await db.execute(
         """
@@ -79,11 +80,11 @@ async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
         FROM conversations c
         WHERE c.funnel_product = ?
           AND c.funnel_stage IN (?, ?)
-          AND EXISTS (
-              SELECT 1 FROM messages m
+          AND (
+              SELECT DATE(MAX(created_at))
+              FROM messages m
               WHERE m.conversation_id = c.id
-                AND DATE(m.created_at) = DATE('now', '-1 day')
-          )
+          ) = DATE('now', '-1 day')
         ORDER BY c.id
         """,
         (REWARM_PRODUCT, *REWARM_STAGES),

@@ -22,7 +22,7 @@ O CaioWoot já tem todas as peças para construir esse agente: modelo de dados d
 ## Decisions
 
 ### D1 — Filtro SQL "sem histórico de transição"
-Query candidata filtra por `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, presença de pelo menos uma mensagem em `DATE('now','-1 day')`. **O safeguard de "sem draft pendente" foi removido por decisão do operador** (2026-04-15): estava excluindo conversas válidas em produção. Se o agente mandar rewarm em conversa com draft pendente, o pior caso é um draft ficar obsoleto — o operador descarta na tela. O ganho em cobertura compensou.
+Query candidata filtra por `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, e **a última mensagem da conversa foi em D-1** (i.e., `DATE(MAX(messages.created_at)) = DATE('now','-1 day')`). A versão inicial usava `EXISTS mensagem em D-1`, que incluía conversas que tiveram msg ontem E também hoje — mas essas estão ativas, não são alvo. **O safeguard de "sem draft pendente" foi removido por decisão do operador** (2026-04-15): estava excluindo conversas válidas em produção. Se o agente mandar rewarm em conversa com draft pendente, o pior caso é um draft ficar obsoleto — o operador descarta na tela.
 
 **Alternativa considerada:** tabela `funnel_stage_transitions` para registrar a data exata da transição. Rejeitada — aumenta escopo (migração + hooks em dois lugares) sem benefício material dado que a heurística "houve mensagem em D-1 + stage atual é handbook/link" captura o alvo real. Se ficar impreciso com uso, criar tabela depois.
 

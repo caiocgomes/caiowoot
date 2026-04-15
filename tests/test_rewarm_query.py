@@ -32,9 +32,10 @@ async def _seed_conversation(
         )
 
     if pending_draft:
-        # Need a trigger message for draft FK
+        # Trigger message também em D-1 pra não sujar o filtro da última mensagem
         trigger_cursor = await db.execute(
-            "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', 'trigger')",
+            "INSERT INTO messages (conversation_id, direction, content, created_at) "
+            "VALUES (?, 'inbound', 'trigger', datetime('now','-1 day'))",
             (conv_id,),
         )
         trigger_id = trigger_cursor.lastrowid
@@ -77,6 +78,22 @@ async def test_query_excludes_conversation_without_yesterday_message(db):
 
 
 @pytest.mark.asyncio
+async def test_query_excludes_conversation_with_message_today(db):
+    """Se teve msg em D-1 MAS também teve msg hoje, a conversa está ativa: fica fora."""
+    conv_id = await _seed_conversation(db, messages_days_ago=[1, 0])
+    results = await select_rewarm_candidates(db)
+    assert not any(r["id"] == conv_id for r in results)
+
+
+@pytest.mark.asyncio
+async def test_query_includes_when_last_message_is_yesterday(db):
+    """Mensagens em D-2 e D-1, sem msg hoje: entra (última msg é D-1)."""
+    conv_id = await _seed_conversation(db, messages_days_ago=[2, 1])
+    results = await select_rewarm_candidates(db)
+    assert any(r["id"] == conv_id for r in results)
+
+
+@pytest.mark.asyncio
 async def test_query_includes_conversation_with_pending_draft(db):
     """Safeguard de pending draft foi removido — conversa continua elegível."""
     conv_id = await _seed_conversation(db, pending_draft=True)
@@ -113,7 +130,8 @@ async def test_query_ignores_any_draft_status(db):
     """Filtro de drafts foi removido inteiro — status do draft não afeta elegibilidade."""
     conv_id = await _seed_conversation(db)
     trigger_cursor = await db.execute(
-        "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', 'trigger')",
+        "INSERT INTO messages (conversation_id, direction, content, created_at) "
+        "VALUES (?, 'inbound', 'trigger', datetime('now','-1 day'))",
         (conv_id,),
     )
     await db.execute(

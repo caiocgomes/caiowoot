@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Query de conversas candidatas a reesquentamento D-1
-O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as conversas que, no momento do clique, satisfazem todos os critérios: `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, existe ao menos uma mensagem em `messages` cuja `DATE(created_at)` é igual a `DATE('now','-1 day')`.
+O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as conversas que, no momento do clique, satisfazem todos os critérios: `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, e a **última** mensagem da conversa foi em D-1 (i.e., `DATE(MAX(messages.created_at)) = DATE('now','-1 day')`). Conversas que tiveram mensagem ontem mas também mensagem hoje SHALL NOT aparecer — elas estão ativas, não esfriaram.
 
 #### Scenario: Conversa elegível é incluída
 - **GIVEN** conversa com `funnel_product='CDO'`, `funnel_stage='handbook_sent'`, ao menos uma mensagem criada ontem, e sem draft pendente
@@ -19,9 +19,19 @@ O sistema SHALL selecionar como candidatas a reesquentamento D-1 exatamente as c
 - **THEN** a conversa SHALL NOT aparecer no resultado
 
 #### Scenario: Conversa sem mensagem em D-1 é excluída
-- **GIVEN** conversa com `funnel_product='CDO'`, `funnel_stage='link_sent'`, última mensagem há 3 dias, sem draft pendente
+- **GIVEN** conversa com `funnel_product='curso-cdo'`, `funnel_stage='link_sent'`, última mensagem há 3 dias
 - **WHEN** o sistema executa a query de candidatas
 - **THEN** a conversa SHALL NOT aparecer no resultado
+
+#### Scenario: Conversa com mensagem hoje é excluída mesmo tendo msg ontem
+- **GIVEN** conversa CDO/handbook_sent que teve mensagem em D-1 E também teve mensagem em D-0 (hoje)
+- **WHEN** o sistema executa a query de candidatas
+- **THEN** a conversa SHALL NOT aparecer — está ativa
+
+#### Scenario: Última mensagem em D-1 após mensagens anteriores
+- **GIVEN** conversa CDO/link_sent com mensagens em D-3, D-2 e D-1, sem mensagem hoje
+- **WHEN** o sistema executa a query de candidatas
+- **THEN** a conversa SHALL aparecer no resultado
 
 #### Scenario: Conversa com draft pendente continua incluída
 - **GIVEN** conversa que satisfaz product/stage/mensagem-D-1 e possui um draft com `status='pending'`
