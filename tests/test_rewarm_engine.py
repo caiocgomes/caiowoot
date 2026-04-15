@@ -24,7 +24,7 @@ def _make_rewarm_response(action="send", message="oi, como foi com o handbook?",
 async def _seed_basic_conversation(db, history=None):
     cursor = await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, funnel_product, funnel_stage) "
-        "VALUES ('5511999', 'Joao', 'CDO', 'handbook_sent')"
+        "VALUES ('5511999', 'Joao', 'curso-cdo', 'handbook_sent')"
     )
     conv_id = cursor.lastrowid
     history = history or [

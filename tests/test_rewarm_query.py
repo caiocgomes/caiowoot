@@ -9,7 +9,7 @@ async def _seed_conversation(
     db,
     phone="5511999999999",
     contact_name="Joao",
-    funnel_product="CDO",
+    funnel_product="curso-cdo",
     funnel_stage="handbook_sent",
     messages_days_ago=None,
     pending_draft=False,

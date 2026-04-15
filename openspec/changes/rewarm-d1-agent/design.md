@@ -22,7 +22,7 @@ O CaioWoot já tem todas as peças para construir esse agente: modelo de dados d
 ## Decisions
 
 ### D1 — Filtro SQL "sem histórico de transição"
-Query candidata filtra por `funnel_product = 'CDO'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, presença de pelo menos uma mensagem em `DATE('now','-1 day')`, ausência de draft pendente (sent_at IS NULL).
+Query candidata filtra por `funnel_product = 'curso-cdo'`, `funnel_stage IN ('handbook_sent', 'link_sent')`, presença de pelo menos uma mensagem em `DATE('now','-1 day')`, ausência de draft pendente (sent_at IS NULL).
 
 **Alternativa considerada:** tabela `funnel_stage_transitions` para registrar a data exata da transição. Rejeitada — aumenta escopo (migração + hooks em dois lugares) sem benefício material dado que a heurística "houve mensagem em D-1 + stage atual é handbook/link" captura o alvo real. Se ficar impreciso com uso, criar tabela depois.
 

@@ -20,7 +20,7 @@ def _rewarm_resp(action="send", message="oi", reason="parou"):
 
 async def _seed(db, phone, name, stage="handbook_sent"):
     cursor = await db.execute(
-        "INSERT INTO conversations (phone_number, contact_name, funnel_product, funnel_stage) VALUES (?, ?, 'CDO', ?)",
+        "INSERT INTO conversations (phone_number, contact_name, funnel_product, funnel_stage) VALUES (?, ?, 'curso-cdo', ?)",
         (phone, name, stage),
     )
     conv_id = cursor.lastrowid

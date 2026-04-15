@@ -19,7 +19,7 @@ from app.services.message_sender import send_and_record
 logger = logging.getLogger(__name__)
 
 REWARM_STAGES = ("handbook_sent", "link_sent")
-REWARM_PRODUCT = "CDO"
+REWARM_PRODUCT = "curso-cdo"  # valor canônico — veja situation_summary.py e UI (index.html)
 REWARM_TOOL_NAME = "rewarm_decision"
 
 REWARM_TOOL = {
