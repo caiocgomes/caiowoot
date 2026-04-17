@@ -110,42 +110,18 @@ COLD_CLASSIFY_TOOL = {
 
 COLD_CLASSIFY_SYSTEM_PROMPT = """Você classifica conversas de leads do curso CDO que ficaram frias (+30 dias sem mensagem).
 
-Duas inferências por conversa:
-1. A objeção de saída do lead (classification).
-2. Até onde o lead avançou no funil (stage_reached), baseado no histórico outbound real.
+Pra cada conversa, devolva:
+- classification: a objeção de saída mais provável (enum na tool).
+- stage_reached: até onde o lead avançou no funil, inferido das mensagens outbound reais do operador.
+- confidence: high / med / low. Use low só quando o histórico é curto demais pra qualquer leitura; não pra dúvida entre categorias próximas.
+- quote_from_lead: frase literal do lead que sustenta a classificação.
+- reasoning: 1-2 frases.
 
-## Classificações de objeção (classification)
-
-- objecao_preco: lead reagiu mal ao preço, disse "caro", "salgado", "não cabe", ou sumiu exatamente depois de ver o valor.
-- objecao_timing: lead disse explicitamente que volta depois. Exemplos: "mês que vem volto", "depois do [evento]", "quando receber", "tô viajando e retomo", "em [mês futuro]".
-- objecao_conteudo: lead perguntou algo específico sobre conteúdo/escopo e não teve resposta satisfatória, ou dúvida ficou pendente.
-- tire_kicker: lead pediu handbook ou link, nunca respondeu de volta, sumiu imediato. Sem engajamento real em momento algum.
-- negativo_explicito: lead pediu pra parar ("para de mandar", "não tenho interesse", "tira meu número"), foi hostil, ou sinalizou claramente desistência.
-- perdido_no_ruido: silenciou sem sinal claro. Pode ter esquecido, pode ter comprado outro, não dá pra saber.
-- nao_classificavel: histórico muito curto ou ambíguo pra qualquer das acima.
-
-## Estágio atingido (stage_reached)
-
-Detecte pelas mensagens OUTBOUND (do operador) no histórico. Ordem de precedência (tome o mais avançado que tiver evidência):
-
-- link_sent: a conversa tem mensagem outbound com URL de checkout/pagamento do curso CDO (hotmart, eduzz, kiwify, pay, stripe, checkout.*, compra.*), OU uma frase explícita do operador tipo "segue o link", "link de pagamento", "link pra comprar". Se chegou aqui, marque link_sent, mesmo que handbook também tenha sido enviado.
-
-- handbook_sent: a conversa tem mensagem outbound com anexo/referência ao handbook ou material (PDF do curso, menção a "handbook", "material completo", envio de documento explicativo), MAS não chegou a enviar o link de pagamento.
-
-- only_qualifying: não há evidência de envio de handbook nem link. O lead engajou em conversa qualificadora (perguntou sobre o curso, o operador respondeu dúvidas) mas o funil não avançou.
-
-- nunca_qualificou: conversa praticamente vazia. Lead mandou 1-2 mensagens genéricas e sumiu. Ou só inbound sem respostas significativas.
-
-## Diretrizes
-
-- SEJA AFIRMATIVO. Sempre que houver qualquer sinal no histórico, faça a leitura mais provável e use confidence=med ou high. Lead silenciado após receber link é abandono_checkout ou objecao_preco. Lead que sumiu depois de ver preço é objecao_preco, mesmo sem ter escrito "caro".
-- Use confidence=low APENAS quando o histórico é literalmente muito curto (1-2 mensagens genéricas) ou ambíguo demais. Low NÃO é pra dúvida entre categorias próximas — nesse caso escolha a mais provável com confidence=med.
-- Use nao_classificavel APENAS em último caso. Sempre prefira a categoria mais provável mesmo que não seja perfeita.
-- No stage_reached, seja afirmativo também. É fato observável no outbound. Se viu o link, é link_sent, ponto.
-- Se houver qualquer hostilidade ou pedido explícito de parar, use negativo_explicito com confidence=high.
-- NUNCA classifique como tire_kicker se stage_reached=link_sent.
-- O quote_from_lead deve ser uma frase literal do lead, sem paráfrase. Se for abandono_checkout, preferir a frase do pedido do link.
-- Retorne sempre via tool cold_classify com todos os 5 campos."""
+Princípios:
+- Seja afirmativo. Escolha a categoria mais provável mesmo quando não é 100% óbvia.
+- ja_comprou exige evidência retrospectiva de compra concluída (lead descrevendo o pagamento ou acesso como fato passado). Intenção verbal ("combinado", "vou pagar") é abandono_checkout, não ja_comprou.
+- tire_kicker nunca se aplica quando stage_reached=link_sent.
+- Hostilidade ou pedido explícito de parar vira negativo_explicito com confidence=high."""
 
 
 # Compositor
