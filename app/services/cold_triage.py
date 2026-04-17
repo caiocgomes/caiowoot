@@ -25,7 +25,11 @@ COLD_PRODUCT = "curso-cdo"
 COLD_COOLDOWN_DAYS = 90
 COLD_FRESH_DAYS_MIN = 30  # última mensagem inbound tem que ser mais antiga que isso
 PREVIEW_LIMIT = 20
-CANDIDATE_POOL = 80  # seleciona até N antes de classificar e reordenar
+CANDIDATE_POOL = 200  # seleciona até N antes de classificar e reordenar
+
+# Status de cold_dispatches que contam como "lead efetivamente tocado" pro cooldown.
+# 'previewed' NÃO conta: foi só gerado rascunho e descartado sem enviar.
+COOLDOWN_BLOCKING_STATUSES = ("sent", "approved")
 
 # Classificação
 CLASSIFICATIONS = (
@@ -129,11 +133,14 @@ Detecte pelas mensagens OUTBOUND (do operador) no histórico. Ordem de precedên
 
 ## Diretrizes
 
-- Seja conservador na classificação de objeção. Na dúvida, use confidence=low.
-- No stage_reached, seja afirmativo. É inferência sobre fatos observáveis no outbound, não sobre intenção. Se viu o link na outbound, é link_sent.
+- SEJA AFIRMATIVO. Sempre que houver qualquer sinal no histórico, faça a leitura mais provável e use confidence=med ou high. Lead silenciado após receber link é abandono_checkout ou objecao_preco. Lead que sumiu depois de ver preço é objecao_preco, mesmo sem ter escrito "caro".
+- Use confidence=low APENAS quando o histórico é literalmente muito curto (1-2 mensagens genéricas) ou ambíguo demais. Low NÃO é pra dúvida entre categorias próximas — nesse caso escolha a mais provável com confidence=med.
+- Use nao_classificavel APENAS em último caso. Sempre prefira a categoria mais provável mesmo que não seja perfeita.
+- No stage_reached, seja afirmativo também. É fato observável no outbound. Se viu o link, é link_sent, ponto.
 - Se houver qualquer hostilidade ou pedido explícito de parar, use negativo_explicito com confidence=high.
-- O quote_from_lead deve ser uma frase literal do lead, sem paráfrase.
-- Retorne sempre via tool cold_classify."""
+- NUNCA classifique como tire_kicker se stage_reached=link_sent.
+- O quote_from_lead deve ser uma frase literal do lead, sem paráfrase. Se for abandono_checkout, preferir a frase do pedido do link.
+- Retorne sempre via tool cold_classify com todos os 5 campos."""
 
 
 # Compositor
@@ -190,46 +197,52 @@ async def select_cold_candidates(db, limit: int = CANDIDATE_POOL) -> list[dict[s
 
     Filtros:
       - funnel_product = curso-cdo
-      - última mensagem inbound > 30 dias atrás
+      - última mensagem da conversa (qualquer direção) há mais de 30 dias
       - cold_do_not_contact = 0
-      - sem cold_dispatch criado nos últimos 90 dias
+      - sem cold_dispatch ENVIADO (status sent/approved) nos últimos 90 dias
+        (previews descartados não contam)
 
     O estágio no funil NÃO é filtro aqui: `funnel_stage` em `conversations` é sobrescrito
-    periodicamente pelo `situation_summary` do Haiku, o que descarta leads que passaram
-    por handbook/link mas tiveram stage reclassificado depois. O stage real é inferido
-    do histórico pelo classificador (stage_reached), que decide depois se é tire_kicker
-    ou vale toque.
+    periodicamente pelo `situation_summary` do Haiku. O stage real é inferido pelo
+    classificador (stage_reached).
+
+    A data de "frieza" usa a última mensagem de qualquer direção, não só inbound. Assim
+    captura casos em que o operador enviou handbook/link e o lead nunca respondeu (última
+    mensagem é outbound). Se operador tiver mandado follow-up recente, o lead sai do pool
+    porque a última atividade foi recente, o que é o comportamento correto.
 
     Ordena por frescor (menor dias frio antes) dentro do pool.
     """
+    cooldown_placeholders = ",".join("?" * len(COOLDOWN_BLOCKING_STATUSES))
     cursor = await db.execute(
-        """
-        WITH last_inbound AS (
+        f"""
+        WITH last_activity AS (
             SELECT conversation_id, MAX(created_at) AS last_at
             FROM messages
-            WHERE direction = 'inbound'
             GROUP BY conversation_id
         ),
         recent_cold AS (
             SELECT conversation_id, MAX(created_at) AS last_cold_at
             FROM cold_dispatches
+            WHERE status IN ({cooldown_placeholders})
             GROUP BY conversation_id
         )
         SELECT c.id, c.phone_number, c.contact_name, c.funnel_stage,
-               li.last_at AS last_inbound_at,
-               julianday('now') - julianday(li.last_at) AS days_cold
+               la.last_at AS last_activity_at,
+               julianday('now') - julianday(la.last_at) AS days_cold
         FROM conversations c
-        JOIN last_inbound li ON li.conversation_id = c.id
+        JOIN last_activity la ON la.conversation_id = c.id
         LEFT JOIN recent_cold rc ON rc.conversation_id = c.id
         WHERE c.funnel_product = ?
           AND COALESCE(c.cold_do_not_contact, 0) = 0
-          AND julianday('now') - julianday(li.last_at) >= ?
+          AND julianday('now') - julianday(la.last_at) >= ?
           AND (rc.last_cold_at IS NULL
                OR julianday('now') - julianday(rc.last_cold_at) >= ?)
         ORDER BY days_cold ASC
         LIMIT ?
         """,
         (
+            *COOLDOWN_BLOCKING_STATUSES,
             COLD_PRODUCT,
             COLD_FRESH_DAYS_MIN,
             COLD_COOLDOWN_DAYS,
@@ -407,9 +420,18 @@ def apply_matrix(
     """Decide ação ∈ {mentoria, conteudo, skip} aplicando matriz + cap + confiança.
 
     `stage` aqui é o `stage_reached` inferido pelo Haiku, não o `funnel_stage` de conversations.
+
+    Regra de confidence afrouxada:
+    - Stage forte (link_sent ou handbook_sent): low confidence NÃO força skip. Fallback
+      pra `perdido_no_ruido` e aplica matriz. Rationale: quem chegou no link/handbook é
+      valioso demais pra descartar só porque Haiku ficou indeciso sobre a objeção.
+    - Stage fraco (only_qualifying, nunca_qualificou): low confidence força skip.
     """
     if confidence == "low":
-        return "skip"
+        if stage in ("link_sent", "handbook_sent"):
+            classification = "perdido_no_ruido"
+        else:
+            return "skip"
     base = _MATRIX_FULL.get(classification, {}).get(stage, "skip")
     if base == "mentoria" and mentoria_used >= cap:
         return _DEMOTE_WHEN_CAP.get(stage, "skip")

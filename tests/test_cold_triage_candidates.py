@@ -12,8 +12,10 @@ async def _seed(
     stage="link_sent",
     product="curso-cdo",
     last_inbound_offset_days=40,
+    last_outbound_offset_days=None,
     cold_do_not_contact=0,
     last_cold_dispatch_offset_days=None,
+    cold_dispatch_status="sent",
 ):
     cursor = await db.execute(
         """INSERT INTO conversations
@@ -23,18 +25,25 @@ async def _seed(
     )
     conv_id = cursor.lastrowid
 
-    await db.execute(
-        f"INSERT INTO messages (conversation_id, direction, content, created_at) "
-        f"VALUES (?, 'inbound', 'oi', datetime('now','-{last_inbound_offset_days} days'))",
-        (conv_id,),
-    )
+    if last_inbound_offset_days is not None:
+        await db.execute(
+            f"INSERT INTO messages (conversation_id, direction, content, created_at) "
+            f"VALUES (?, 'inbound', 'oi', datetime('now','-{last_inbound_offset_days} days'))",
+            (conv_id,),
+        )
+    if last_outbound_offset_days is not None:
+        await db.execute(
+            f"INSERT INTO messages (conversation_id, direction, content, created_at) "
+            f"VALUES (?, 'outbound', 'aqui esta o link', datetime('now','-{last_outbound_offset_days} days'))",
+            (conv_id,),
+        )
     if last_cold_dispatch_offset_days is not None:
         await db.execute(
             f"""INSERT INTO cold_dispatches
                (conversation_id, classification, confidence, action, status, created_at)
-               VALUES (?, 'objecao_timing', 'high', 'mentoria', 'sent',
+               VALUES (?, 'objecao_timing', 'high', 'mentoria', ?,
                        datetime('now', '-{last_cold_dispatch_offset_days} days'))""",
-            (conv_id,),
+            (conv_id, cold_dispatch_status),
         )
     await db.commit()
     return conv_id
@@ -83,16 +92,42 @@ async def test_select_respects_do_not_contact(db):
 
 
 @pytest.mark.asyncio
-async def test_select_respects_cooldown(db):
-    await _seed(db, "5511", last_cold_dispatch_offset_days=60)  # dentro do cooldown
-    await _seed(db, "5522", last_cold_dispatch_offset_days=100)  # fora
-    await _seed(db, "5533", last_cold_dispatch_offset_days=None)  # nunca
+async def test_select_respects_cooldown_for_sent_only(db):
+    """Cooldown bloqueia leads com dispatch sent/approved. 'previewed' não bloqueia."""
+    await _seed(db, "5511", last_cold_dispatch_offset_days=60, cold_dispatch_status="sent")        # bloqueado
+    await _seed(db, "5522", last_cold_dispatch_offset_days=100, cold_dispatch_status="sent")       # liberou (>90d)
+    await _seed(db, "5533", last_cold_dispatch_offset_days=None)                                    # nunca tocado
+    await _seed(db, "5544", last_cold_dispatch_offset_days=60, cold_dispatch_status="previewed")   # NÃO bloqueia, foi só preview
+    await _seed(db, "5566", last_cold_dispatch_offset_days=60, cold_dispatch_status="skipped")     # NÃO bloqueia, pulou
 
     rows = await select_cold_candidates(db)
     phones = [r["phone_number"] for r in rows]
     assert "5511" not in phones
     assert "5522" in phones
     assert "5533" in phones
+    assert "5544" in phones
+    assert "5566" in phones
+
+
+@pytest.mark.asyncio
+async def test_select_includes_outbound_last_leads(db):
+    """Leads onde operador foi o último a falar (outbound) e lead silenciou também entram."""
+    # Lead 1: última inbound há 60d, operador mandou link há 40d e lead nunca respondeu.
+    await _seed(db, "5511", last_inbound_offset_days=60, last_outbound_offset_days=40)
+    # Lead 2: última inbound há 15d (recente). Operador ainda espera resposta, não é cold.
+    await _seed(db, "5522", last_inbound_offset_days=15, last_outbound_offset_days=14)
+    # Lead 3: última inbound há 40d, operador acabou de tentar follow-up ontem (1d).
+    # Atividade recente, NÃO é cold ainda.
+    await _seed(db, "5533", last_inbound_offset_days=40, last_outbound_offset_days=1)
+    # Lead 4: só outbound (conversa onde lead não respondeu nunca). 50d.
+    await _seed(db, "5544", last_inbound_offset_days=None, last_outbound_offset_days=50)
+
+    rows = await select_cold_candidates(db)
+    phones = [r["phone_number"] for r in rows]
+    assert "5511" in phones
+    assert "5522" not in phones
+    assert "5533" not in phones  # follow-up recente do operador tira do pool
+    assert "5544" in phones
 
 
 @pytest.mark.asyncio

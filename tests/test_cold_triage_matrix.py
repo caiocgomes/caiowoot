@@ -84,11 +84,20 @@ def test_abandono_checkout_is_highest_priority_score():
     assert abandono > perdido
 
 
-def test_low_confidence_always_skip():
-    assert apply_matrix("objecao_timing", "link_sent", mentoria_used=0, cap=15, confidence="low") == "skip"
-    assert apply_matrix("abandono_checkout", "link_sent", mentoria_used=0, cap=15, confidence="low") == "skip"
-    assert apply_matrix("perdido_no_ruido", "link_sent", mentoria_used=0, cap=15, confidence="low") == "skip"
+def test_low_confidence_on_strong_stage_falls_back_to_perdido_no_ruido():
+    """Low confidence em link/handbook NÃO força skip: vira perdido_no_ruido e segue matriz.
+    Rationale: quem chegou no funil de venda é valioso demais pra descartar por dúvida."""
+    # link_sent + low → perdido_no_ruido × link_sent = mentoria
+    assert apply_matrix("nao_classificavel", "link_sent", mentoria_used=0, cap=15, confidence="low") == "mentoria"
+    assert apply_matrix("objecao_timing", "link_sent", mentoria_used=0, cap=15, confidence="low") == "mentoria"
+    # handbook_sent + low → perdido_no_ruido × handbook_sent = skip (matriz diz skip)
     assert apply_matrix("objecao_preco", "handbook_sent", mentoria_used=0, cap=15, confidence="low") == "skip"
+
+
+def test_low_confidence_on_weak_stage_still_skips():
+    """Low confidence em only_qualifying ou nunca_qualificou continua forçando skip."""
+    assert apply_matrix("objecao_timing", "only_qualifying", mentoria_used=0, cap=15, confidence="low") == "skip"
+    assert apply_matrix("objecao_timing", "nunca_qualificou", mentoria_used=0, cap=15, confidence="low") == "skip"
 
 
 def test_medium_confidence_respects_matrix():
