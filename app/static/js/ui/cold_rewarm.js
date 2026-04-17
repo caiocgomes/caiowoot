@@ -64,9 +64,18 @@ function renderColdModal(items) {
 
     const header = document.createElement('div');
     header.className = 'rewarm-card-header';
-    const name = document.createElement('div');
-    name.className = 'rewarm-card-name';
+    const name = document.createElement('a');
+    name.className = 'rewarm-card-name cold-card-name-link';
+    name.href = '#';
     name.textContent = `${item.contact_name || '(sem nome)'} · ${item.phone_number}`;
+    name.title = 'abrir conversa';
+    name.onclick = (e) => {
+      e.preventDefault();
+      if (typeof window.openConversation === 'function') {
+        window.openConversation(item.conversation_id);
+        closeColdRewarmModal();
+      }
+    };
     const stage = document.createElement('span');
     stage.className = 'rewarm-card-stage';
     stage.textContent = item.stage_reached || item.funnel_stage || '(?)';
@@ -123,16 +132,10 @@ function renderColdModal(items) {
   if (skips.length > 0) {
     const title = document.createElement('div');
     title.className = 'rewarm-skip-title';
-    title.textContent = `Pulados (${skips.length})`;
+    title.textContent = `Pulados (${skips.length}) — clique no nome pra abrir a conversa`;
     skipList.appendChild(title);
     for (const item of skips) {
-      const row = document.createElement('div');
-      row.className = 'rewarm-skip-row';
-      const reason = item.classification === 'negativo_explicito'
-        ? 'negativo explicito'
-        : `${item.classification} (${item.confidence})`;
-      row.innerHTML = `<span class="rewarm-skip-name">${escapeHtml(item.contact_name || '(sem nome)')}</span><span class="rewarm-skip-reason">${escapeHtml(reason)}</span>`;
-      skipList.appendChild(row);
+      skipList.appendChild(renderSkipRow(item));
     }
   }
 
@@ -140,6 +143,56 @@ function renderColdModal(items) {
   body.hidden = false;
   footer.hidden = false;
   empty.hidden = true;
+}
+
+function renderSkipRow(item) {
+  const row = document.createElement('div');
+  row.className = 'rewarm-skip-row cold-skip-row';
+
+  const head = document.createElement('div');
+  head.className = 'cold-skip-head';
+
+  const nameLink = document.createElement('a');
+  nameLink.className = 'rewarm-skip-name cold-skip-name-link';
+  nameLink.href = '#';
+  nameLink.textContent = `${item.contact_name || '(sem nome)'} · ${item.phone_number}`;
+  nameLink.title = 'abrir conversa';
+  nameLink.onclick = (e) => {
+    e.preventDefault();
+    if (typeof window.openConversation === 'function') {
+      window.openConversation(item.conversation_id);
+      closeColdRewarmModal();
+    }
+  };
+  head.appendChild(nameLink);
+
+  const chips = document.createElement('span');
+  chips.className = 'cold-skip-chips';
+  chips.innerHTML = `
+    <span class="cold-chip cold-chip-${item.classification}">${escapeHtml(item.classification || '?')}</span>
+    <span class="cold-chip cold-chip-conf-${item.confidence}">conf: ${escapeHtml(item.confidence || '?')}</span>
+    <span class="cold-chip">${escapeHtml(item.stage_reached || '?')}</span>
+    <span class="cold-chip cold-chip-days">${Math.round(item.days_cold || 0)}d frio</span>
+  `;
+  head.appendChild(chips);
+
+  row.appendChild(head);
+
+  if (item.quote_from_lead) {
+    const q = document.createElement('div');
+    q.className = 'cold-skip-quote';
+    q.textContent = `"${item.quote_from_lead}"`;
+    row.appendChild(q);
+  }
+
+  if (item.reasoning) {
+    const r = document.createElement('div');
+    r.className = 'cold-skip-reasoning';
+    r.textContent = item.reasoning;
+    row.appendChild(r);
+  }
+
+  return row;
 }
 
 function removeColdItem(itemId) {
