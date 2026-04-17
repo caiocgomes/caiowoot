@@ -33,6 +33,7 @@ COOLDOWN_BLOCKING_STATUSES = ("sent", "approved")
 
 # Classificação
 CLASSIFICATIONS = (
+    "ja_comprou",          # lead já confirmou pagamento ou acesso à plataforma
     "abandono_checkout",   # lead pediu link explicitamente, recebeu, sumiu (intenção verbal máxima)
     "objecao_preco",
     "objecao_timing",
@@ -63,7 +64,8 @@ COLD_CLASSIFY_TOOL = {
                 "type": "string",
                 "enum": list(CLASSIFICATIONS),
                 "description": (
-                    "abandono_checkout: lead VERBALIZOU pedido do link de pagamento ('me da o link', 'manda o link', 'onde pago', 'como faço pra comprar') APÓS saber o preço ou engajar no conteúdo, recebeu o link e silenciou. Intenção de compra verbal máxima. "
+                    "ja_comprou: CHECAR PRIMEIRO. Lead confirmou pagamento ou acesso ao curso ('paguei', 'comprei', 'já acessei a plataforma', 'entrei no curso', 'fiz a inscrição', 'cartão passou', 'recebi acesso'). Se houver QUALQUER indicação de conclusão de compra, use essa categoria. Nunca deve receber cold rewarm. "
+                    "abandono_checkout: lead VERBALIZOU pedido do link de pagamento ('me da o link', 'manda o link', 'onde pago') APÓS saber o preço ou engajar no conteúdo, recebeu o link e silenciou SEM confirmar pagamento. Se confirmou, é ja_comprou. "
                     "objecao_preco: reagiu a preço ou mencionou valor, depois sumiu, SEM ter chegado a pedir o link. "
                     "objecao_timing: disse que volta depois. "
                     "objecao_conteudo: dúvida específica sobre conteúdo não resolvida. "
@@ -345,9 +347,15 @@ async def classify_conversation(conversation_id: int, db=None) -> dict[str, Any]
 # ───────────────────────── Matriz ─────────────────────────
 
 # Ação por classificação × stage_reached, quando confiança >= med e cap não atingido.
-# Filosofia: link_sent é sagrado. Quem chegou lá, exceto hostilidade explícita, vira mentoria
-# porque o sinal de intenção é forte demais pra ignorar.
+# Filosofia: link_sent é sagrado. Quem chegou lá, exceto hostilidade explícita OU compra
+# confirmada, vira mentoria porque o sinal de intenção é forte demais pra ignorar.
 _MATRIX_FULL = {
+    "ja_comprou": {
+        "link_sent":        "skip",   # já comprou, nunca toca
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
     "abandono_checkout": {
         "link_sent":        "mentoria",   # caso de maior valor do pool
         "handbook_sent":    "mentoria",   # raro mas pode ocorrer se Haiku inferir pedido de link via conversa
@@ -421,12 +429,17 @@ def apply_matrix(
 
     `stage` aqui é o `stage_reached` inferido pelo Haiku, não o `funnel_stage` de conversations.
 
+    Regra 0 (inviolável): ja_comprou sempre vira skip. Fallback de low confidence NÃO
+    se aplica a ja_comprou — se Haiku identificou compra, skip direto.
+
     Regra de confidence afrouxada:
     - Stage forte (link_sent ou handbook_sent): low confidence NÃO força skip. Fallback
       pra `perdido_no_ruido` e aplica matriz. Rationale: quem chegou no link/handbook é
       valioso demais pra descartar só porque Haiku ficou indeciso sobre a objeção.
     - Stage fraco (only_qualifying, nunca_qualificou): low confidence força skip.
     """
+    if classification == "ja_comprou":
+        return "skip"
     if confidence == "low":
         if stage in ("link_sent", "handbook_sent"):
             classification = "perdido_no_ruido"
@@ -619,6 +632,19 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
         enriched = []
         for cand, classif in zip(candidates, classifications):
             enriched.append({**cand, **classif})
+
+        # Proteção crítica: lead identificado como ja_comprou é marcado como
+        # cold_do_not_contact permanentemente pra nunca mais voltar ao pool.
+        for e in enriched:
+            if e.get("classification") == "ja_comprou":
+                await db.execute(
+                    "UPDATE conversations SET cold_do_not_contact = 1 WHERE id = ?",
+                    (e["id"],),
+                )
+                logger.warning(
+                    "cold triage detected purchase; marking conv=%s as cold_do_not_contact",
+                    e["id"],
+                )
 
         # Prioriza pelo stage_reached inferido + classification + frescor
         enriched.sort(

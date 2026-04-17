@@ -114,3 +114,15 @@ def test_negativo_explicito_always_skip_even_at_link():
     """Hostilidade nunca vira toque, mesmo em link_sent (regra inviolável)."""
     assert apply_matrix("negativo_explicito", "link_sent", mentoria_used=0, cap=15, confidence="high") == "skip"
     assert apply_matrix("negativo_explicito", "handbook_sent", mentoria_used=0, cap=15, confidence="high") == "skip"
+
+
+def test_ja_comprou_always_skip_regardless_of_stage_or_confidence():
+    """Lead que já comprou nunca vira toque. Regra zero."""
+    for stage in ("link_sent", "handbook_sent", "only_qualifying", "nunca_qualificou"):
+        for conf in ("high", "med", "low"):
+            assert apply_matrix("ja_comprou", stage, mentoria_used=0, cap=15, confidence=conf) == "skip"
+
+
+def test_ja_comprou_skip_not_overridden_by_cap():
+    """Cap atingido não transforma ja_comprou em conteudo. Skip sempre."""
+    assert apply_matrix("ja_comprou", "link_sent", mentoria_used=99, cap=15, confidence="high") == "skip"
