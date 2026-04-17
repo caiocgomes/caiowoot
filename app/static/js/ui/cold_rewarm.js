@@ -69,7 +69,7 @@ function renderColdModal(items) {
     name.textContent = `${item.contact_name || '(sem nome)'} · ${item.phone_number}`;
     const stage = document.createElement('span');
     stage.className = 'rewarm-card-stage';
-    stage.textContent = item.funnel_stage;
+    stage.textContent = item.stage_reached || item.funnel_stage || '(?)';
     header.appendChild(name);
     header.appendChild(stage);
 

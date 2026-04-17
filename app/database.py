@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS cold_dispatches (
     conversation_id INTEGER NOT NULL REFERENCES conversations(id),
     classification TEXT NOT NULL,
     confidence TEXT NOT NULL,
+    stage_reached TEXT,
     quote_from_lead TEXT,
     reasoning TEXT,
     action TEXT NOT NULL,
@@ -470,6 +471,8 @@ MIGRATIONS = [
      "CREATE INDEX IF NOT EXISTS idx_cold_dispatches_scheduled_send ON cold_dispatches(scheduled_send_id)"),
     ("cold_do_not_contact_on_conversations",
      "ALTER TABLE conversations ADD COLUMN cold_do_not_contact INTEGER DEFAULT 0"),
+    ("cold_dispatches_stage_reached",
+     "ALTER TABLE cold_dispatches ADD COLUMN stage_reached TEXT"),
 ]
 
 _chroma_client = None

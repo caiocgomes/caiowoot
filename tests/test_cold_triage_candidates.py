@@ -41,17 +41,22 @@ async def _seed(
 
 
 @pytest.mark.asyncio
-async def test_select_filters_product_and_stage(db):
+async def test_select_filters_product_but_not_stage(db):
+    """Opção B: stage não filtra. Todos os produtos CDO frios passam, stage é inferido depois."""
     await _seed(db, "5511", stage="link_sent")
     await _seed(db, "5522", stage="handbook_sent")
-    await _seed(db, "5533", stage="qualifying")  # fora do filtro
-    await _seed(db, "5544", product="outro")     # produto errado
+    await _seed(db, "5533", stage="qualifying")       # agora passa, stage é inferido
+    await _seed(db, "5577", stage=None)               # stage NULL também passa
+    await _seed(db, "5588", stage="coisa_estranha")   # stage inventado também passa
+    await _seed(db, "5544", product="outro")          # produto errado, pula
 
     rows = await select_cold_candidates(db)
     phones = [r["phone_number"] for r in rows]
     assert "5511" in phones
     assert "5522" in phones
-    assert "5533" not in phones
+    assert "5533" in phones
+    assert "5577" in phones
+    assert "5588" in phones
     assert "5544" not in phones
 
 
@@ -91,11 +96,12 @@ async def test_select_respects_cooldown(db):
 
 
 @pytest.mark.asyncio
-async def test_link_sent_comes_before_handbook(db):
-    # handbook criado primeiro, link depois — a ordem do select tem que priorizar link
-    await _seed(db, "5511", stage="handbook_sent", last_inbound_offset_days=35)
-    await _seed(db, "5522", stage="link_sent", last_inbound_offset_days=50)
+async def test_candidates_ordered_by_freshness(db):
+    """Sem filtro de stage, o SELECT só ordena por frescor. A priorização por stage_reached
+    acontece depois da classificação, no score_candidate."""
+    await _seed(db, "5511", stage="link_sent", last_inbound_offset_days=55)
+    await _seed(db, "5522", stage="handbook_sent", last_inbound_offset_days=35)
 
     rows = await select_cold_candidates(db)
-    # link_sent deve aparecer antes
-    assert rows[0]["funnel_stage"] == "link_sent"
+    # Mais fresco (35 dias) vem antes
+    assert rows[0]["phone_number"] == "5522"

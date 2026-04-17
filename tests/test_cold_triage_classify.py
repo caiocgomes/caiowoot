@@ -10,7 +10,7 @@ from app.services.cold_triage import (
 )
 
 
-def _classify_resp(classification, confidence, quote="", reasoning="x"):
+def _classify_resp(classification, confidence, stage_reached="link_sent", quote="", reasoning="x"):
     mock = MagicMock()
     block = MagicMock()
     block.type = "tool_use"
@@ -18,6 +18,7 @@ def _classify_resp(classification, confidence, quote="", reasoning="x"):
     block.input = {
         "classification": classification,
         "confidence": confidence,
+        "stage_reached": stage_reached,
         "quote_from_lead": quote,
         "reasoning": reasoning,
     }
@@ -50,13 +51,14 @@ async def test_classify_returns_timing_for_volta_mes_que_vem(db):
 
     mock_client = AsyncMock()
     mock_client.messages.create = AsyncMock(return_value=_classify_resp(
-        "objecao_timing", "high", "mês que vem eu volto", "lead adiou"
+        "objecao_timing", "high", "link_sent", "mês que vem eu volto", "lead adiou"
     ))
     with patch("app.services.cold_triage.get_anthropic_client", return_value=mock_client):
         result = await classify_conversation(conv_id, db=db)
 
     assert result["classification"] == "objecao_timing"
     assert result["confidence"] == "high"
+    assert result["stage_reached"] == "link_sent"
     assert "mês que vem" in result["quote_from_lead"]
 
 
@@ -72,19 +74,20 @@ async def test_classify_on_haiku_exception_returns_unclassifiable(db):
 
     assert result["classification"] == "nao_classificavel"
     assert result["confidence"] == "low"
+    assert result["stage_reached"] == "nunca_qualificou"
 
 
 @pytest.mark.asyncio
-async def test_classify_invalid_classification_is_normalized(db):
+async def test_classify_invalid_fields_are_normalized(db):
     conv_id = await _seed_conv(db, "5533", [("outbound", "oi", "2026-02-15 10:00:00")])
     mock_client = AsyncMock()
-    # Haiku retorna label fora do enum
     block = MagicMock()
     block.type = "tool_use"
     block.name = COLD_CLASSIFY_TOOL_NAME
     block.input = {
         "classification": "qualquercoisa",
         "confidence": "nao_sei",
+        "stage_reached": "stage_inventado",
         "quote_from_lead": "",
         "reasoning": "",
     }
@@ -96,6 +99,7 @@ async def test_classify_invalid_classification_is_normalized(db):
 
     assert result["classification"] == "nao_classificavel"
     assert result["confidence"] == "low"
+    assert result["stage_reached"] == "nunca_qualificou"
 
 
 @pytest.mark.asyncio
@@ -109,3 +113,4 @@ async def test_classify_no_tool_use_fallback(db):
         result = await classify_conversation(conv_id, db=db)
 
     assert result["classification"] == "nao_classificavel"
+    assert result["stage_reached"] == "nunca_qualificou"

@@ -22,7 +22,6 @@ from app.services.message_sender import send_and_record
 logger = logging.getLogger(__name__)
 
 COLD_PRODUCT = "curso-cdo"
-COLD_STAGES = ("handbook_sent", "link_sent")
 COLD_COOLDOWN_DAYS = 90
 COLD_FRESH_DAYS_MIN = 30  # última mensagem inbound tem que ser mais antiga que isso
 PREVIEW_LIMIT = 20
@@ -39,10 +38,19 @@ CLASSIFICATIONS = (
     "nao_classificavel",
 )
 
+# Estágio que o lead efetivamente atingiu (inferido do histórico, independente
+# do funnel_stage atual da tabela conversations que é mutável).
+STAGES_REACHED = (
+    "link_sent",           # operador enviou URL de checkout ou referência explícita ao link
+    "handbook_sent",       # operador enviou handbook/material mas não chegou ao link
+    "only_qualifying",     # lead qualificou (perguntou algo) mas não recebeu handbook nem link
+    "nunca_qualificou",    # lead mal engajou, praticamente não houve conversa
+)
+
 COLD_CLASSIFY_TOOL_NAME = "cold_classify"
 COLD_CLASSIFY_TOOL = {
     "name": COLD_CLASSIFY_TOOL_NAME,
-    "description": "Classifica a objeção implícita de saída do lead em uma conversa que esfriou.",
+    "description": "Classifica a objeção implícita de saída do lead e identifica até onde o funil avançou.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -64,24 +72,39 @@ COLD_CLASSIFY_TOOL = {
                 "enum": ["high", "med", "low"],
                 "description": "Confiança na classificação. Na dúvida real, use low.",
             },
+            "stage_reached": {
+                "type": "string",
+                "enum": list(STAGES_REACHED),
+                "description": (
+                    "Até onde o lead avançou no funil, inferido do histórico outbound real. "
+                    "link_sent: operador enviou URL de pagamento/checkout do curso CDO (hotmart, eduzz, kiwify, pay, stripe etc), "
+                    "OU mencionou explicitamente 'segue o link', 'link de compra', 'link de pagamento' de forma clara. "
+                    "handbook_sent: operador enviou material/handbook/PDF mas NÃO chegou a enviar o link de pagamento. "
+                    "only_qualifying: lead trocou mensagens qualificando interesse mas nenhum material foi enviado. "
+                    "nunca_qualificou: lead praticamente não engajou, sem conversa significativa."
+                ),
+            },
             "quote_from_lead": {
                 "type": "string",
                 "description": "Trecho literal da última mensagem relevante do lead que sustenta a classificação. Vazio se não há trecho claro.",
             },
             "reasoning": {
                 "type": "string",
-                "description": "1-2 frases justificando a classificação.",
+                "description": "1-2 frases justificando a classificação e o stage_reached.",
             },
         },
-        "required": ["classification", "confidence", "quote_from_lead", "reasoning"],
+        "required": ["classification", "confidence", "stage_reached", "quote_from_lead", "reasoning"],
     },
 }
 
 COLD_CLASSIFY_SYSTEM_PROMPT = """Você classifica conversas de leads do curso CDO que ficaram frias (+30 dias sem mensagem).
 
-Objetivo: inferir a objeção de saída do lead com base no histórico, para decidir depois qual ação tomar.
+Duas inferências por conversa:
+1. A objeção de saída do lead (classification).
+2. Até onde o lead avançou no funil (stage_reached), baseado no histórico outbound real.
 
-Classificações possíveis:
+## Classificações de objeção (classification)
+
 - objecao_preco: lead reagiu mal ao preço, disse "caro", "salgado", "não cabe", ou sumiu exatamente depois de ver o valor.
 - objecao_timing: lead disse explicitamente que volta depois. Exemplos: "mês que vem volto", "depois do [evento]", "quando receber", "tô viajando e retomo", "em [mês futuro]".
 - objecao_conteudo: lead perguntou algo específico sobre conteúdo/escopo e não teve resposta satisfatória, ou dúvida ficou pendente.
@@ -90,8 +113,22 @@ Classificações possíveis:
 - perdido_no_ruido: silenciou sem sinal claro. Pode ter esquecido, pode ter comprado outro, não dá pra saber.
 - nao_classificavel: histórico muito curto ou ambíguo pra qualquer das acima.
 
-Diretrizes:
-- Seja conservador. Na dúvida, use confidence=low ou classifique como nao_classificavel.
+## Estágio atingido (stage_reached)
+
+Detecte pelas mensagens OUTBOUND (do operador) no histórico. Ordem de precedência (tome o mais avançado que tiver evidência):
+
+- link_sent: a conversa tem mensagem outbound com URL de checkout/pagamento do curso CDO (hotmart, eduzz, kiwify, pay, stripe, checkout.*, compra.*), OU uma frase explícita do operador tipo "segue o link", "link de pagamento", "link pra comprar". Se chegou aqui, marque link_sent, mesmo que handbook também tenha sido enviado.
+
+- handbook_sent: a conversa tem mensagem outbound com anexo/referência ao handbook ou material (PDF do curso, menção a "handbook", "material completo", envio de documento explicativo), MAS não chegou a enviar o link de pagamento.
+
+- only_qualifying: não há evidência de envio de handbook nem link. O lead engajou em conversa qualificadora (perguntou sobre o curso, o operador respondeu dúvidas) mas o funil não avançou.
+
+- nunca_qualificou: conversa praticamente vazia. Lead mandou 1-2 mensagens genéricas e sumiu. Ou só inbound sem respostas significativas.
+
+## Diretrizes
+
+- Seja conservador na classificação de objeção. Na dúvida, use confidence=low.
+- No stage_reached, seja afirmativo. É inferência sobre fatos observáveis no outbound, não sobre intenção. Se viu o link na outbound, é link_sent.
 - Se houver qualquer hostilidade ou pedido explícito de parar, use negativo_explicito com confidence=high.
 - O quote_from_lead deve ser uma frase literal do lead, sem paráfrase.
 - Retorne sempre via tool cold_classify."""
@@ -151,15 +188,20 @@ async def select_cold_candidates(db, limit: int = CANDIDATE_POOL) -> list[dict[s
 
     Filtros:
       - funnel_product = curso-cdo
-      - funnel_stage em (handbook_sent, link_sent)
       - última mensagem inbound > 30 dias atrás
       - cold_do_not_contact = 0
       - sem cold_dispatch criado nos últimos 90 dias
 
-    Ordena link_sent antes de handbook_sent, mais frescos (menor dias frios) antes.
+    O estágio no funil NÃO é filtro aqui: `funnel_stage` em `conversations` é sobrescrito
+    periodicamente pelo `situation_summary` do Haiku, o que descarta leads que passaram
+    por handbook/link mas tiveram stage reclassificado depois. O stage real é inferido
+    do histórico pelo classificador (stage_reached), que decide depois se é tire_kicker
+    ou vale toque.
+
+    Ordena por frescor (menor dias frio antes) dentro do pool.
     """
     cursor = await db.execute(
-        f"""
+        """
         WITH last_inbound AS (
             SELECT conversation_id, MAX(created_at) AS last_at
             FROM messages
@@ -178,18 +220,15 @@ async def select_cold_candidates(db, limit: int = CANDIDATE_POOL) -> list[dict[s
         JOIN last_inbound li ON li.conversation_id = c.id
         LEFT JOIN recent_cold rc ON rc.conversation_id = c.id
         WHERE c.funnel_product = ?
-          AND c.funnel_stage IN (?, ?)
           AND COALESCE(c.cold_do_not_contact, 0) = 0
           AND julianday('now') - julianday(li.last_at) >= ?
           AND (rc.last_cold_at IS NULL
                OR julianday('now') - julianday(rc.last_cold_at) >= ?)
-        ORDER BY CASE WHEN c.funnel_stage = 'link_sent' THEN 0 ELSE 1 END,
-                 days_cold ASC
+        ORDER BY days_cold ASC
         LIMIT ?
         """,
         (
             COLD_PRODUCT,
-            *COLD_STAGES,
             COLD_FRESH_DAYS_MIN,
             COLD_COOLDOWN_DAYS,
             limit,
@@ -228,15 +267,20 @@ def _parse_classify_response(response) -> dict[str, Any]:
             confidence = inp.get("confidence", "low")
             if confidence not in ("high", "med", "low"):
                 confidence = "low"
+            stage_reached = inp.get("stage_reached", "nunca_qualificou")
+            if stage_reached not in STAGES_REACHED:
+                stage_reached = "nunca_qualificou"
             return {
                 "classification": classification,
                 "confidence": confidence,
+                "stage_reached": stage_reached,
                 "quote_from_lead": (inp.get("quote_from_lead") or "").strip(),
                 "reasoning": (inp.get("reasoning") or "").strip(),
             }
     return {
         "classification": "nao_classificavel",
         "confidence": "low",
+        "stage_reached": "nunca_qualificou",
         "quote_from_lead": "",
         "reasoning": "sem tool_use na resposta",
     }
@@ -277,6 +321,7 @@ async def classify_conversation(conversation_id: int, db=None) -> dict[str, Any]
         return {
             "classification": "nao_classificavel",
             "confidence": "low",
+            "stage_reached": "nunca_qualificou",
             "quote_from_lead": "",
             "reasoning": f"erro: {exc}",
         }
@@ -284,20 +329,60 @@ async def classify_conversation(conversation_id: int, db=None) -> dict[str, Any]
 
 # ───────────────────────── Matriz ─────────────────────────
 
-# Ação por classificação × estágio, quando confiança >= med e cap não atingido
+# Ação por classificação × stage_reached, quando confiança >= med e cap não atingido.
+# stage_reached = até onde o lead chegou no funil, inferido pelo Haiku sobre o histórico real.
 _MATRIX_FULL = {
-    "objecao_preco":      {"link_sent": "mentoria", "handbook_sent": "skip"},
-    "objecao_timing":     {"link_sent": "mentoria", "handbook_sent": "mentoria"},
-    "objecao_conteudo":   {"link_sent": "mentoria", "handbook_sent": "conteudo"},
-    "tire_kicker":        {"link_sent": "skip",     "handbook_sent": "skip"},
-    "negativo_explicito": {"link_sent": "skip",     "handbook_sent": "skip"},
-    "perdido_no_ruido":   {"link_sent": "conteudo", "handbook_sent": "skip"},
-    "nao_classificavel":  {"link_sent": "skip",     "handbook_sent": "skip"},
+    "objecao_preco": {
+        "link_sent":        "mentoria",
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
+    "objecao_timing": {
+        "link_sent":        "mentoria",
+        "handbook_sent":    "mentoria",
+        "only_qualifying":  "conteudo",
+        "nunca_qualificou": "skip",
+    },
+    "objecao_conteudo": {
+        "link_sent":        "mentoria",
+        "handbook_sent":    "conteudo",
+        "only_qualifying":  "conteudo",
+        "nunca_qualificou": "skip",
+    },
+    "tire_kicker": {
+        "link_sent":        "skip",
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
+    "negativo_explicito": {
+        "link_sent":        "skip",
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
+    "perdido_no_ruido": {
+        "link_sent":        "conteudo",
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
+    "nao_classificavel": {
+        "link_sent":        "skip",
+        "handbook_sent":    "skip",
+        "only_qualifying":  "skip",
+        "nunca_qualificou": "skip",
+    },
 }
 
-# Rebaixamento quando cap de mentoria atingido
-_MATRIX_NO_MENTORIA = {
-    "mentoria": {"link_sent": "conteudo", "handbook_sent": "skip"},
+# Quando cap de mentoria atingido: mentoria rebaixa pra conteudo se stage é link/handbook,
+# senão vira skip.
+_DEMOTE_WHEN_CAP = {
+    "link_sent":        "conteudo",
+    "handbook_sent":    "conteudo",
+    "only_qualifying":  "skip",
+    "nunca_qualificou": "skip",
 }
 
 
@@ -308,12 +393,15 @@ def apply_matrix(
     cap: int,
     confidence: str,
 ) -> str:
-    """Decide ação ∈ {mentoria, conteudo, skip} aplicando matriz + cap + confiança."""
+    """Decide ação ∈ {mentoria, conteudo, skip} aplicando matriz + cap + confiança.
+
+    `stage` aqui é o `stage_reached` inferido pelo Haiku, não o `funnel_stage` de conversations.
+    """
     if confidence == "low":
         return "skip"
     base = _MATRIX_FULL.get(classification, {}).get(stage, "skip")
     if base == "mentoria" and mentoria_used >= cap:
-        return _MATRIX_NO_MENTORIA["mentoria"][stage]
+        return _DEMOTE_WHEN_CAP.get(stage, "skip")
     return base
 
 
@@ -347,10 +435,15 @@ _TIMING_KEYWORDS = (
 
 
 def score_candidate(classification: str, stage: str, days_cold: float, quote: str) -> float:
-    """Score maior = mais prioritário."""
+    """Score maior = mais prioritário. `stage` aqui é o stage_reached inferido."""
     score = 0.0
     if stage == "link_sent":
         score += 50.0
+    elif stage == "handbook_sent":
+        score += 20.0
+    elif stage == "only_qualifying":
+        score += 5.0
+    # nunca_qualificou: score base
     if classification == "objecao_timing":
         score += 30.0
         if any(kw in (quote or "").lower() for kw in _TIMING_KEYWORDS):
@@ -469,7 +562,8 @@ async def compose_message(
 # ───────────────────────── Preview pipeline ─────────────────────────
 
 async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any]]:
-    """Pipeline completo para o botão: seleciona, classifica, aplica matriz, compõe, grava."""
+    """Pipeline completo para o botão: seleciona, classifica (inclui stage_reached),
+    aplica matriz sobre stage_reached (não sobre funnel_stage volátil), compõe, grava."""
     own = db is None
     if own:
         db = await get_db()
@@ -482,7 +576,7 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
         mentoria_used = await count_mentoria_offers_this_month(db)
         cap = settings.cold_mentoria_monthly_cap
 
-        # Classifica em paralelo
+        # Classifica em paralelo (retorna classification + stage_reached + quote + confidence)
         classify_tasks = [classify_conversation(c["id"], db=db) for c in candidates]
         classifications = await asyncio.gather(*classify_tasks, return_exceptions=False)
 
@@ -490,11 +584,13 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
         for cand, classif in zip(candidates, classifications):
             enriched.append({**cand, **classif})
 
-        # Aplica matriz respeitando cap. Alocação sequencial (ordem importa pouco aqui, mas
-        # seguimos score pra não gastar mentoria em lead menos prioritário).
+        # Prioriza pelo stage_reached inferido + classification + frescor
         enriched.sort(
             key=lambda x: score_candidate(
-                x["classification"], x["funnel_stage"], x.get("days_cold") or 0.0, x.get("quote_from_lead", "")
+                x["classification"],
+                x["stage_reached"],
+                x.get("days_cold") or 0.0,
+                x.get("quote_from_lead", ""),
             ),
             reverse=True,
         )
@@ -504,7 +600,7 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
         for e in enriched:
             action = apply_matrix(
                 e["classification"],
-                e["funnel_stage"],
+                e["stage_reached"],
                 mentoria_allocated,
                 cap,
                 e["confidence"],
@@ -513,13 +609,10 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
                 mentoria_allocated += 1
             decided.append({**e, "action": action})
 
-        # Corta top N pela ordem já definida, mas mantém skips visíveis até o limit pra
-        # transparência. Prefere mostrar os não-skip no topo.
         non_skip = [d for d in decided if d["action"] != "skip"]
         skip = [d for d in decided if d["action"] == "skip"]
         visible = (non_skip + skip)[:limit]
 
-        # Compõe mensagens apenas pros non-skip dentro do visível
         compose_pairs: list[tuple[int, asyncio.Task]] = []
         for idx, item in enumerate(visible):
             if item["action"] == "skip":
@@ -539,7 +632,6 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
         for (idx, _), msg in zip(compose_pairs, compose_results):
             visible[idx]["message"] = msg or ""
 
-        # Grava previews
         results: list[dict[str, Any]] = []
         for item in visible:
             dispatch_id = await _insert_preview_row(db, item)
@@ -549,7 +641,8 @@ async def run_preview(db=None, limit: int = PREVIEW_LIMIT) -> list[dict[str, Any
                 "conversation_id": item["id"],
                 "phone_number": item["phone_number"],
                 "contact_name": item.get("contact_name"),
-                "funnel_stage": item["funnel_stage"],
+                "funnel_stage": item.get("funnel_stage"),  # estado atual, só pra referência
+                "stage_reached": item["stage_reached"],     # inferido, usado na matriz
                 "classification": item["classification"],
                 "confidence": item["confidence"],
                 "quote_from_lead": item.get("quote_from_lead", ""),
@@ -570,14 +663,15 @@ async def _insert_preview_row(db, item: dict[str, Any]) -> int:
     cursor = await db.execute(
         """INSERT INTO cold_dispatches
            (conversation_id, classification, confidence, quote_from_lead, reasoning,
-            action, message_draft, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'previewed')""",
+            stage_reached, action, message_draft, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'previewed')""",
         (
             item["id"],
             item["classification"],
             item["confidence"],
             item.get("quote_from_lead", ""),
             item.get("reasoning", ""),
+            item.get("stage_reached", "nunca_qualificou"),
             item["action"],
             item.get("message", "") if item["action"] != "skip" else None,
         ),
