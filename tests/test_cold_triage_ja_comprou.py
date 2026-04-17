@@ -138,3 +138,95 @@ async def test_non_purchase_leads_not_marked_do_not_contact(db):
     )
     row = await cur.fetchone()
     assert row["cold_do_not_contact"] == 0
+
+
+# ─────────── Guarda contra falso-positivo de ja_comprou ───────────
+
+from app.services.cold_triage import (
+    _has_purchase_evidence,
+    _parse_classify_response,
+)
+
+
+def test_has_purchase_evidence_detects_past_tense():
+    """Padrões retrospectivos reais são detectados."""
+    assert _has_purchase_evidence("paguei aqui e já acessei a plataforma")
+    assert _has_purchase_evidence("comprei ontem")
+    assert _has_purchase_evidence("fechei a compra pelo cartao")
+    assert _has_purchase_evidence("cartão passou, obrigado")
+    assert _has_purchase_evidence("recebi o email de acesso")
+    assert _has_purchase_evidence("fiz a inscrição agora")
+    assert _has_purchase_evidence("me inscrevi")
+    assert _has_purchase_evidence("chegou o acesso")
+    assert _has_purchase_evidence("ja to dentro", "")
+    assert _has_purchase_evidence("entrei no curso")
+
+
+def test_has_purchase_evidence_ignores_intent():
+    """Intenção NÃO é confundida com confirmação."""
+    assert not _has_purchase_evidence("combinado")
+    assert not _has_purchase_evidence("fechado, vou pagar")
+    assert not _has_purchase_evidence("vou comprar amanhã")
+    assert not _has_purchase_evidence("quero comprar")
+    assert not _has_purchase_evidence("beleza")
+    assert not _has_purchase_evidence("ok, me manda")
+    assert not _has_purchase_evidence("")
+    assert not _has_purchase_evidence("valeu, depois a gente fala")
+
+
+def test_parse_classify_rebaixa_ja_comprou_sem_evidencia():
+    """Caso Diogo: Haiku diz ja_comprou mas quote é 'Combinado'. Deve virar abandono_checkout."""
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = COLD_CLASSIFY_TOOL_NAME
+    block.input = {
+        "classification": "ja_comprou",
+        "confidence": "high",
+        "stage_reached": "link_sent",
+        "quote_from_lead": "Combinado",
+        "reasoning": "Lead confirmou intencao de compra apos receber link",
+    }
+    resp = MagicMock()
+    resp.content = [block]
+
+    result = _parse_classify_response(resp)
+    assert result["classification"] == "abandono_checkout"
+    assert result["quote_from_lead"] == "Combinado"
+
+
+def test_parse_classify_mantem_ja_comprou_com_evidencia():
+    """Haiku marca ja_comprou e quote tem 'paguei'. Mantém ja_comprou."""
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = COLD_CLASSIFY_TOOL_NAME
+    block.input = {
+        "classification": "ja_comprou",
+        "confidence": "high",
+        "stage_reached": "link_sent",
+        "quote_from_lead": "Paguei aqui e ja acessei a plataforma",
+        "reasoning": "Lead confirmou pagamento e acesso",
+    }
+    resp = MagicMock()
+    resp.content = [block]
+
+    result = _parse_classify_response(resp)
+    assert result["classification"] == "ja_comprou"
+
+
+def test_parse_classify_rebaixa_ja_comprou_com_evidencia_no_reasoning():
+    """Evidência retrospectiva pode estar no reasoning, não necessariamente no quote."""
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = COLD_CLASSIFY_TOOL_NAME
+    block.input = {
+        "classification": "ja_comprou",
+        "confidence": "high",
+        "stage_reached": "link_sent",
+        "quote_from_lead": "obrigado",
+        "reasoning": "Lead escreveu que recebeu o acesso e entrou no curso",
+    }
+    resp = MagicMock()
+    resp.content = [block]
+
+    result = _parse_classify_response(resp)
+    assert result["classification"] == "ja_comprou"

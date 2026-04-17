@@ -10,8 +10,11 @@ import asyncio
 import json
 import logging
 import random
+import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
+from statistics import median
 from typing import Any
 
 from app.config import now_local, settings
@@ -274,6 +277,46 @@ async def _load_history_for_classify(db, conversation_id: int) -> str:
     return "\n".join(lines)
 
 
+def _normalize_text(s: str) -> str:
+    """Remove acentos e normaliza pra lowercase pra matching robusto."""
+    if not s:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", s)
+    ascii_only = nfkd.encode("ASCII", "ignore").decode("ASCII")
+    return ascii_only.lower()
+
+
+# Padrões que caracterizam confirmação retrospectiva de compra.
+# Devem estar no quote OU reasoning pra ja_comprou ser validado.
+# Cobrem primeira pessoa (lead falando: "paguei") e terceira pessoa
+# (reasoning do Haiku narrando: "lead pagou", "recebeu").
+_PURCHASE_EVIDENCE_PATTERNS = (
+    r"\b(?:paguei|pagou)\b",
+    r"\b(?:comprei|comprou)\b",
+    r"\b(?:fechei|fechou)\s+(?:a\s+compra|o\s+negocio)",
+    r"acess(?:ei|ou|amos|aram)\s+(?:a\s+plataforma|o\s+curso)",
+    r"entr(?:ei|ou|amos|aram)\s+(?:no\s+curso|na\s+plataforma)",
+    r"\b(?:recebi|recebeu)\s+(?:o\s+acesso|o\s+email|a\s+confirma|o\s+curso|o\s+link)",
+    r"chegou\s+(?:o\s+acesso|o\s+email|a\s+confirma|o\s+curso|o\s+link)",
+    r"(?:fiz|fez|concluí|conclui|concluiu)\s+a\s+inscri",
+    r"(?:me|se)\s+inscrev",
+    r"cartao\s+(?:passou|aprovado)",
+    r"pagamento\s+aprovado",
+    r"(?:ja\s+)?(?:to|estou|tou|esta|está)\s+(?:no\s+curso|dentro|fazendo\s+o\s+curso)",
+)
+
+
+def _has_purchase_evidence(*texts: str) -> bool:
+    """True se qualquer texto contém padrão retrospectivo de compra concluída."""
+    haystack = _normalize_text(" ".join(t for t in texts if t))
+    if not haystack:
+        return False
+    for pattern in _PURCHASE_EVIDENCE_PATTERNS:
+        if re.search(pattern, haystack):
+            return True
+    return False
+
+
 def _parse_classify_response(response) -> dict[str, Any]:
     for block in response.content:
         if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == COLD_CLASSIFY_TOOL_NAME:
@@ -287,12 +330,26 @@ def _parse_classify_response(response) -> dict[str, Any]:
             stage_reached = inp.get("stage_reached", "nunca_qualificou")
             if stage_reached not in STAGES_REACHED:
                 stage_reached = "nunca_qualificou"
+            quote = (inp.get("quote_from_lead") or "").strip()
+            reasoning = (inp.get("reasoning") or "").strip()
+
+            # Guarda contra falso ja_comprou: se Haiku marcou mas o texto não contém
+            # evidência retrospectiva real, rebaixa. Isso previne casos como lead que
+            # disse "combinado" depois do link (intenção, não confirmação) ser marcado
+            # erroneamente como comprador. Nesses casos quase sempre é abandono_checkout.
+            if classification == "ja_comprou" and not _has_purchase_evidence(quote, reasoning):
+                logger.info(
+                    "cold classify: ja_comprou sem evidência retrospectiva, rebaixando para abandono_checkout; quote=%r",
+                    quote,
+                )
+                classification = "abandono_checkout"
+
             return {
                 "classification": classification,
                 "confidence": confidence,
                 "stage_reached": stage_reached,
-                "quote_from_lead": (inp.get("quote_from_lead") or "").strip(),
-                "reasoning": (inp.get("reasoning") or "").strip(),
+                "quote_from_lead": quote,
+                "reasoning": reasoning,
             }
     return {
         "classification": "nao_classificavel",
