@@ -29,6 +29,7 @@ CANDIDATE_POOL = 80  # seleciona até N antes de classificar e reordenar
 
 # Classificação
 CLASSIFICATIONS = (
+    "abandono_checkout",   # lead pediu link explicitamente, recebeu, sumiu (intenção verbal máxima)
     "objecao_preco",
     "objecao_timing",
     "objecao_conteudo",
@@ -58,10 +59,11 @@ COLD_CLASSIFY_TOOL = {
                 "type": "string",
                 "enum": list(CLASSIFICATIONS),
                 "description": (
-                    "objecao_preco: reagiu a preço ou mencionou valor. "
+                    "abandono_checkout: lead VERBALIZOU pedido do link de pagamento ('me da o link', 'manda o link', 'onde pago', 'como faço pra comprar') APÓS saber o preço ou engajar no conteúdo, recebeu o link e silenciou. Intenção de compra verbal máxima. "
+                    "objecao_preco: reagiu a preço ou mencionou valor, depois sumiu, SEM ter chegado a pedir o link. "
                     "objecao_timing: disse que volta depois. "
                     "objecao_conteudo: dúvida específica sobre conteúdo não resolvida. "
-                    "tire_kicker: pediu handbook/link sem engajar. "
+                    "tire_kicker: pediu handbook sem engajar. NUNCA se aplica se o operador chegou a enviar link de pagamento ao lead. "
                     "negativo_explicito: pediu pra parar ou foi hostil. "
                     "perdido_no_ruido: silenciou sem sinal claro. "
                     "nao_classificavel: nada acima cabe."
@@ -330,8 +332,15 @@ async def classify_conversation(conversation_id: int, db=None) -> dict[str, Any]
 # ───────────────────────── Matriz ─────────────────────────
 
 # Ação por classificação × stage_reached, quando confiança >= med e cap não atingido.
-# stage_reached = até onde o lead chegou no funil, inferido pelo Haiku sobre o histórico real.
+# Filosofia: link_sent é sagrado. Quem chegou lá, exceto hostilidade explícita, vira mentoria
+# porque o sinal de intenção é forte demais pra ignorar.
 _MATRIX_FULL = {
+    "abandono_checkout": {
+        "link_sent":        "mentoria",   # caso de maior valor do pool
+        "handbook_sent":    "mentoria",   # raro mas pode ocorrer se Haiku inferir pedido de link via conversa
+        "only_qualifying":  "conteudo",
+        "nunca_qualificou": "skip",
+    },
     "objecao_preco": {
         "link_sent":        "mentoria",
         "handbook_sent":    "skip",
@@ -351,25 +360,27 @@ _MATRIX_FULL = {
         "nunca_qualificou": "skip",
     },
     "tire_kicker": {
-        "link_sent":        "skip",
+        "link_sent":        "mentoria",   # fallback: Haiku errou a classificação (proibido pelo prompt,
+                                           # mas se vier, a matriz rebate pra mentoria; é lead com link,
+                                           # merece a oferta)
         "handbook_sent":    "skip",
         "only_qualifying":  "skip",
         "nunca_qualificou": "skip",
     },
     "negativo_explicito": {
-        "link_sent":        "skip",
+        "link_sent":        "skip",       # hostilidade explícita nunca vira toque, nem pra link
         "handbook_sent":    "skip",
         "only_qualifying":  "skip",
         "nunca_qualificou": "skip",
     },
     "perdido_no_ruido": {
-        "link_sent":        "conteudo",
+        "link_sent":        "mentoria",   # rede de segurança: silêncio pós-link é valioso
         "handbook_sent":    "skip",
         "only_qualifying":  "skip",
         "nunca_qualificou": "skip",
     },
     "nao_classificavel": {
-        "link_sent":        "skip",
+        "link_sent":        "mentoria",   # rede de segurança: Haiku indeciso + link = ainda vale toque
         "handbook_sent":    "skip",
         "only_qualifying":  "skip",
         "nunca_qualificou": "skip",
@@ -444,7 +455,10 @@ def score_candidate(classification: str, stage: str, days_cold: float, quote: st
     elif stage == "only_qualifying":
         score += 5.0
     # nunca_qualificou: score base
-    if classification == "objecao_timing":
+    if classification == "abandono_checkout":
+        score += 60.0  # prioridade máxima: verbalizou pedido do link e abandonou
+                        # (acima de objecao_timing + bonus de keyword de retorno)
+    elif classification == "objecao_timing":
         score += 30.0
         if any(kw in (quote or "").lower() for kw in _TIMING_KEYWORDS):
             score += 20.0
@@ -453,7 +467,7 @@ def score_candidate(classification: str, stage: str, days_cold: float, quote: st
     elif classification == "objecao_conteudo":
         score += 15.0
     elif classification == "perdido_no_ruido":
-        score += 5.0
+        score += 10.0  # subiu porque perdido_no_ruido + link_sent agora vira mentoria
     # Mais frescos primeiro dentro do mesmo estágio
     score += max(0.0, 30.0 - min(float(days_cold or 0), 120.0) / 4.0)
     return score
