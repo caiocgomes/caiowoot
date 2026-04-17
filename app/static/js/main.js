@@ -16,6 +16,7 @@ import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm
 import { openSettings, closeSettings, switchSettingsTab, loadSettingsPrompts, loadSettingsProfile, renderSettingsTab, saveSettings, resetPrompt } from './ui/settings.js';
 import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFunnelStage } from './ui/context-panel.js';
 import { startRewarmD1, closeRewarmModal, sendRewarmBatch } from './ui/rewarm.js';
+import { startColdRewarm, closeColdRewarmModal, sendColdBatch } from './ui/cold_rewarm.js';
 
 // Wire up notification's openConversation reference
 setOpenConversation(openConversation);
@@ -275,6 +276,9 @@ window.showCampaignForm = showCampaignForm;
 window.startRewarmD1 = startRewarmD1;
 window.closeRewarmModal = closeRewarmModal;
 window.sendRewarmBatch = sendRewarmBatch;
+window.startColdRewarm = startColdRewarm;
+window.closeColdRewarmModal = closeColdRewarmModal;
+window.sendColdBatch = sendColdBatch;
 window.cancelCampaignForm = cancelCampaignForm;
 window.createCampaign = createCampaign;
 window.generateFormVariations = generateFormVariations;

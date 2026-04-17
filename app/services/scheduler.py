@@ -26,7 +26,7 @@ async def _process_due_sends():
         # Fetch all messages now in 'sending' state
         rows = await db.execute(
             """SELECT id, conversation_id, content, draft_id, draft_group_id,
-                      selected_draft_index, created_by
+                      selected_draft_index, created_by, send_at
                FROM scheduled_sends
                WHERE status = 'sending'"""
         )
@@ -54,6 +54,13 @@ async def _process_due_sends():
                        WHERE id = ?""",
                     (send["id"],),
                 )
+                if send["created_by"] == "rewarm_agent":
+                    await db2.execute(
+                        """UPDATE rewarm_dispatches
+                           SET sent_at = datetime('now'), status = 'sent'
+                           WHERE scheduled_send_id = ? AND sent_at IS NULL""",
+                        (send["id"],),
+                    )
                 await db2.commit()
             finally:
                 await db2.close()

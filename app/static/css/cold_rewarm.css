@@ -1,0 +1,66 @@
+/* Cold rewarm — reusa classes do rewarm, adiciona chips e citação */
+
+#cold-rewarm-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 var(--space-lg) var(--space-md);
+  padding: 10px;
+  background: var(--color-bg-card);
+  border: 1px dashed var(--color-border-muted);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+#cold-rewarm-btn:hover {
+  background: var(--color-bg-elevated);
+}
+
+.cold-card {
+  border-left: 3px solid var(--color-accent, #8b5cf6);
+}
+
+.cold-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.cold-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--color-bg-elevated, #2a2a2a);
+  color: var(--color-text-secondary, #999);
+  border: 1px solid var(--color-border-muted, #333);
+}
+
+.cold-chip-objecao_preco { border-color: #f59e0b; color: #f59e0b; }
+.cold-chip-objecao_timing { border-color: #10b981; color: #10b981; }
+.cold-chip-objecao_conteudo { border-color: #3b82f6; color: #3b82f6; }
+.cold-chip-tire_kicker { border-color: #6b7280; color: #6b7280; }
+.cold-chip-perdido_no_ruido { border-color: #9ca3af; color: #9ca3af; }
+.cold-chip-negativo_explicito { border-color: #ef4444; color: #ef4444; }
+.cold-chip-nao_classificavel { border-color: #6b7280; color: #6b7280; }
+
+.cold-chip-conf-high { border-color: #10b981; color: #10b981; }
+.cold-chip-conf-med { border-color: #f59e0b; color: #f59e0b; }
+.cold-chip-conf-low { border-color: #ef4444; color: #ef4444; }
+
+.cold-chip-action-mentoria { background: #8b5cf6; color: white; border-color: #8b5cf6; }
+.cold-chip-action-conteudo { background: #3b82f6; color: white; border-color: #3b82f6; }
+.cold-chip-action-skip { background: #6b7280; color: white; border-color: #6b7280; }
+
+.cold-quote {
+  font-style: italic;
+  font-size: 13px;
+  color: var(--color-text-secondary, #999);
+  padding: 6px 10px;
+  margin: 6px 0;
+  border-left: 2px solid var(--color-border-muted, #333);
+  background: var(--color-bg-subtle, rgba(0,0,0,0.2));
+  border-radius: 4px;
+}

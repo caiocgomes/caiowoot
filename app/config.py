@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     evolution_webhook_secret: str = ""  # empty = disabled
     timezone: str = "America/Sao_Paulo"
     rewarm_auto_send: bool = False  # quando True, pipeline de rewarm envia sem revisão humana
+    cold_mentoria_monthly_cap: int = 15  # cap de ofertas de mentoria por mês no cold rewarm
 
     model_config = {"env_file": ".env"}
 

@@ -9,8 +9,9 @@ from starlette.requests import Request
 
 from app.auth import AuthMiddleware, validate_session_cookie, COOKIE_NAME
 from app.database import init_db
-from app.routes import admin, attachments, campaigns, conversations, health, knowledge, login, messages, review, rewarm, rules, scheduled, settings, webhook
+from app.routes import admin, attachments, campaigns, cold_rewarm, conversations, health, knowledge, login, messages, review, rewarm, rules, scheduled, settings, webhook
 from app.services.campaign_executor import campaign_executor_loop
+from app.services.rewarm_cron import rewarm_cron_loop
 from app.services.scheduler import scheduler_loop
 from app.websocket_manager import manager
 
@@ -22,15 +23,21 @@ async def lifespan(app: FastAPI):
     await init_db()
     task = asyncio.create_task(scheduler_loop())
     campaign_task = asyncio.create_task(campaign_executor_loop())
+    rewarm_task = asyncio.create_task(rewarm_cron_loop())
     yield
     task.cancel()
     campaign_task.cancel()
+    rewarm_task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         pass
     try:
         await campaign_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await rewarm_task
     except asyncio.CancelledError:
         pass
 
@@ -62,6 +69,7 @@ app.include_router(scheduled.router)
 app.include_router(admin.router)
 app.include_router(campaigns.router)
 app.include_router(rewarm.router)
+app.include_router(cold_rewarm.router)
 app.include_router(health.router)
 
 

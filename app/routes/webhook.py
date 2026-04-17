@@ -9,6 +9,11 @@ from app.config import settings
 from app.database import get_db_connection
 from app.services.auto_qualifier import auto_qualify_respond
 from app.services.draft_engine import generate_drafts
+from app.services.cold_triage import mark_cold_response_received
+from app.services.rewarm_bandit import (
+    handle_reward_inbound,
+    mark_dispatch_skipped_client_replied,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +114,9 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
     )
     cancelled_sends = await cancelled_rows.fetchall()
 
+    for cancelled in cancelled_sends:
+        await mark_dispatch_skipped_client_replied(db, cancelled["id"])
+
     await db.commit()
 
     # Tag conversation if sender is from a campaign
@@ -146,6 +154,11 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
         asyncio.create_task(auto_qualify_respond(conversation_id, msg_id))
     else:
         asyncio.create_task(generate_drafts(conversation_id, msg_id))
+
+    # Reward hook: se há dispatch de rewarm aberto, classifica e grava reward
+    asyncio.create_task(handle_reward_inbound(conversation_id, msg_id))
+    # Cold response hook: se há cold_dispatch recente, marca responded_at
+    asyncio.create_task(mark_cold_response_received(conversation_id, msg_id))
 
     # Notify connected WebSocket clients
     from app.websocket_manager import manager

@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     is_qualified INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    origin_campaign_id INTEGER
+    origin_campaign_id INTEGER,
+    cold_do_not_contact INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -180,6 +181,63 @@ CREATE TABLE IF NOT EXISTS campaign_variations (
     usage_count INTEGER DEFAULT 0,
     is_active INTEGER DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS rewarm_dispatches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+    features_json TEXT NOT NULL,
+    arm TEXT NOT NULL,
+    scheduled_send_id INTEGER REFERENCES scheduled_sends(id),
+    scheduled_for TIMESTAMP NOT NULL,
+    sent_at TIMESTAMP,
+    responded_at TIMESTAMP,
+    productive INTEGER,
+    reward INTEGER,
+    closed_at TIMESTAMP,
+    converted_at TIMESTAMP,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bandit_state (
+    arm TEXT PRIMARY KEY,
+    feature_names_json TEXT NOT NULL,
+    mu_json TEXT NOT NULL,
+    sigma_json TEXT NOT NULL,
+    n_obs INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cron_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot_key TEXT NOT NULL,
+    ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cold_dispatches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+    classification TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    quote_from_lead TEXT,
+    reasoning TEXT,
+    action TEXT NOT NULL,
+    message_draft TEXT,
+    message_sent TEXT,
+    scheduled_send_id INTEGER REFERENCES scheduled_sends(id),
+    status TEXT NOT NULL DEFAULT 'previewed',
+    responded_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cron_runs_slot_date ON cron_runs(slot_key, DATE(ran_at));
+CREATE INDEX IF NOT EXISTS idx_cold_dispatches_conv_created ON cold_dispatches(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_cold_dispatches_action_status_created ON cold_dispatches(action, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_cold_dispatches_scheduled_send ON cold_dispatches(scheduled_send_id);
+CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_conv_open ON rewarm_dispatches(conversation_id, responded_at, sent_at);
+CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_scheduled_send ON rewarm_dispatches(scheduled_send_id);
+CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_closed ON rewarm_dispatches(arm, closed_at);
 """
 
 MIGRATIONS = [
@@ -343,6 +401,75 @@ MIGRATIONS = [
      "ALTER TABLE conversations ADD COLUMN is_qualified INTEGER DEFAULT 0"),
     ("conversations_existing_qualified",
      "UPDATE conversations SET is_qualified = 1 WHERE is_qualified = 0"),
+    ("rewarm_dispatches_table", """
+        CREATE TABLE IF NOT EXISTS rewarm_dispatches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            features_json TEXT NOT NULL,
+            arm TEXT NOT NULL,
+            scheduled_send_id INTEGER REFERENCES scheduled_sends(id),
+            scheduled_for TIMESTAMP NOT NULL,
+            sent_at TIMESTAMP,
+            responded_at TIMESTAMP,
+            productive INTEGER,
+            reward INTEGER,
+            closed_at TIMESTAMP,
+            converted_at TIMESTAMP,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("idx_rewarm_dispatches_conv_open",
+     "CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_conv_open ON rewarm_dispatches(conversation_id, responded_at, sent_at)"),
+    ("idx_rewarm_dispatches_scheduled_send",
+     "CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_scheduled_send ON rewarm_dispatches(scheduled_send_id)"),
+    ("idx_rewarm_dispatches_closed",
+     "CREATE INDEX IF NOT EXISTS idx_rewarm_dispatches_closed ON rewarm_dispatches(arm, closed_at)"),
+    ("bandit_state_table", """
+        CREATE TABLE IF NOT EXISTS bandit_state (
+            arm TEXT PRIMARY KEY,
+            feature_names_json TEXT NOT NULL,
+            mu_json TEXT NOT NULL,
+            sigma_json TEXT NOT NULL,
+            n_obs INTEGER NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("cron_runs_table", """
+        CREATE TABLE IF NOT EXISTS cron_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_key TEXT NOT NULL,
+            ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("idx_cron_runs_slot_date",
+     "CREATE UNIQUE INDEX IF NOT EXISTS idx_cron_runs_slot_date ON cron_runs(slot_key, DATE(ran_at))"),
+    ("cold_dispatches_table", """
+        CREATE TABLE IF NOT EXISTS cold_dispatches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            classification TEXT NOT NULL,
+            confidence TEXT NOT NULL,
+            quote_from_lead TEXT,
+            reasoning TEXT,
+            action TEXT NOT NULL,
+            message_draft TEXT,
+            message_sent TEXT,
+            scheduled_send_id INTEGER REFERENCES scheduled_sends(id),
+            status TEXT NOT NULL DEFAULT 'previewed',
+            responded_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """),
+    ("idx_cold_dispatches_conv_created",
+     "CREATE INDEX IF NOT EXISTS idx_cold_dispatches_conv_created ON cold_dispatches(conversation_id, created_at)"),
+    ("idx_cold_dispatches_action_status_created",
+     "CREATE INDEX IF NOT EXISTS idx_cold_dispatches_action_status_created ON cold_dispatches(action, status, created_at)"),
+    ("idx_cold_dispatches_scheduled_send",
+     "CREATE INDEX IF NOT EXISTS idx_cold_dispatches_scheduled_send ON cold_dispatches(scheduled_send_id)"),
+    ("cold_do_not_contact_on_conversations",
+     "ALTER TABLE conversations ADD COLUMN cold_do_not_contact INTEGER DEFAULT 0"),
 ]
 
 _chroma_client = None
