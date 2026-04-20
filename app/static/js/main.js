@@ -15,7 +15,7 @@ import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, h
 import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm, createCampaign, generateFormVariations, editFormVariation, createAndStartCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
 import { openSettings, closeSettings, switchSettingsTab, loadSettingsPrompts, loadSettingsProfile, renderSettingsTab, saveSettings, resetPrompt } from './ui/settings.js';
 import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFunnelStage } from './ui/context-panel.js';
-import { startRewarmD1, closeRewarmModal, sendRewarmBatch } from './ui/rewarm.js';
+import { startRewarmLeads, startRewarmD1, closeRewarmModal, sendRewarmBatch, closeRewarmDateModal, confirmRewarmDate } from './ui/rewarm.js';
 import { startColdRewarm, closeColdRewarmModal, sendColdBatch } from './ui/cold_rewarm.js';
 
 // Wire up notification's openConversation reference
@@ -273,8 +273,11 @@ window.toggleRule = toggleRule;
 window.saveRule = saveRule;
 window.cancelRuleEdit = cancelRuleEdit;
 window.showCampaignForm = showCampaignForm;
+window.startRewarmLeads = startRewarmLeads;
 window.startRewarmD1 = startRewarmD1;
 window.closeRewarmModal = closeRewarmModal;
+window.closeRewarmDateModal = closeRewarmDateModal;
+window.confirmRewarmDate = confirmRewarmDate;
 window.sendRewarmBatch = sendRewarmBatch;
 window.startColdRewarm = startColdRewarm;
 window.closeColdRewarmModal = closeColdRewarmModal;

@@ -1,4 +1,56 @@
-/* Rewarm D-1 — botão na sidebar + modal de revisão */
+/* Rewarm — botão na sidebar + modal de revisão */
+
+.rewarm-modal-reference {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #999);
+  border-bottom: 1px solid var(--color-border-muted, #2a2a2a);
+  background: var(--color-bg-subtle, rgba(0,0,0,0.2));
+}
+
+.rewarm-date-panel {
+  max-width: 420px;
+}
+
+.rewarm-date-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rewarm-date-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-muted, #2a2a2a);
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+}
+
+.rewarm-date-option input[type="radio"] {
+  margin: 0;
+}
+
+.rewarm-date-label-main {
+  font-weight: 500;
+}
+
+.rewarm-date-label-sub {
+  color: var(--color-text-secondary, #999);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.rewarm-date-custom-input {
+  margin-left: auto;
+  background: var(--color-bg-elevated, #1e1e1e);
+  color: inherit;
+  border: 1px solid var(--color-border-muted, #2a2a2a);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
 
 #rewarm-d1-btn {
   display: block;

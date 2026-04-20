@@ -9,9 +9,10 @@ import asyncio
 import json
 import logging
 import random
+from datetime import timedelta
 from typing import Any
 
-from app.config import settings
+from app.config import now_local, settings
 from app.database import get_db
 from app.services.claude_client import get_anthropic_client
 from app.services.message_sender import send_and_record
@@ -67,13 +68,22 @@ Sua tarefa: ler uma conversa entre o operador e o lead que recebeu handbook ou l
 Retorne SEMPRE via a tool `rewarm_decision` com action, message e reason. Em skip, message pode ser string vazia."""
 
 
-async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
-    """Seleciona conversas candidatas a reesquentamento D-1.
+def default_reference_date() -> str:
+    """Default simples: ontem local."""
+    return (now_local().date() - timedelta(days=1)).isoformat()
+
+
+async def select_rewarm_candidates(
+    db,
+    reference_date: str | None = None,
+) -> list[dict[str, Any]]:
+    """Seleciona conversas candidatas a reesquentamento para uma data de referência.
 
     Critério: funnel_product=CDO, funnel_stage em (handbook_sent, link_sent),
-    última mensagem da conversa foi em D-1 (se teve mensagem hoje, a conversa
-    está ativa e fica fora — rewarm só faz sentido pra conversas que esfriaram).
+    última mensagem da conversa tem DATE() = reference_date. Se `reference_date`
+    é None, usa ontem local como default (comportamento histórico do D-1).
     """
+    ref = reference_date or default_reference_date()
     cursor = await db.execute(
         """
         SELECT c.id, c.phone_number, c.contact_name, c.funnel_product, c.funnel_stage
@@ -84,10 +94,10 @@ async def select_rewarm_candidates(db) -> list[dict[str, Any]]:
               SELECT DATE(MAX(created_at))
               FROM messages m
               WHERE m.conversation_id = c.id
-          ) = DATE('now', '-1 day')
+          ) = ?
         ORDER BY c.id
         """,
-        (REWARM_PRODUCT, *REWARM_STAGES),
+        (REWARM_PRODUCT, *REWARM_STAGES, ref),
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]

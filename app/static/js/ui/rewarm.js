@@ -1,24 +1,132 @@
 import { showToast } from './toast.js';
 
 let rewarmItems = [];
+let currentReferenceDate = null;
 
-export async function startRewarmD1() {
+const WEEKDAY_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const MONTH_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+
+function _fmtDateShort(iso) {
+  // iso = "YYYY-MM-DD" → "17/04 (sexta-feira)"
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = WEEKDAY_PT[dt.getUTCDay()];
+  const dd = String(d).padStart(2, '0');
+  const mm = MONTH_PT[m - 1];
+  return `${dd}/${mm} (${dow})`;
+}
+
+
+function _yesterdayIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+
+export async function startRewarmLeads() {
+  // Fetch suggested date to populate modal, then show date chooser.
+  const modal = document.getElementById('rewarm-date-modal');
+  let suggested = null;
+  try {
+    const resp = await fetch('/rewarm/suggested-date');
+    if (resp.ok) suggested = await resp.json();
+  } catch (err) {
+    console.warn('suggested-date fetch failed, using client fallback', err);
+  }
+
+  const yesterdayIso = _yesterdayIso();
+  const yesterdaySub = document.getElementById('rewarm-date-yesterday-sub');
+  yesterdaySub.textContent = _fmtDateShort(yesterdayIso);
+
+  const suggestedRow = document.getElementById('rewarm-date-suggested-row');
+  const suggestedMain = document.getElementById('rewarm-date-suggested-main');
+  const suggestedSub = document.getElementById('rewarm-date-suggested-sub');
+
+  if (suggested && suggested.date && suggested.date !== yesterdayIso) {
+    suggestedMain.textContent = (suggested.label || '').charAt(0).toUpperCase() + (suggested.label || '').slice(1);
+    suggestedSub.textContent = _fmtDateShort(suggested.date);
+    suggestedRow.dataset.iso = suggested.date;
+    suggestedRow.hidden = false;
+    // Marcar sugestão como default quando diferente de ontem (caso típico: segunda-feira)
+    const suggestedRadio = suggestedRow.querySelector('input[type=radio]');
+    suggestedRadio.checked = true;
+  } else {
+    suggestedRow.hidden = true;
+    const yesterdayRadio = document.querySelector('input[name=rewarm-date-choice][value=yesterday]');
+    yesterdayRadio.checked = true;
+  }
+
+  const customInput = document.getElementById('rewarm-date-custom-input');
+  customInput.value = yesterdayIso;
+  // Permitir clique no input de data selecionar o radio custom automaticamente.
+  customInput.onfocus = () => {
+    document.querySelector('input[name=rewarm-date-choice][value=custom]').checked = true;
+  };
+  customInput.onchange = () => {
+    document.querySelector('input[name=rewarm-date-choice][value=custom]').checked = true;
+  };
+
+  modal.hidden = false;
+}
+
+
+export function closeRewarmDateModal() {
+  document.getElementById('rewarm-date-modal').hidden = true;
+}
+
+
+export async function confirmRewarmDate() {
+  const choice = document.querySelector('input[name=rewarm-date-choice]:checked');
+  if (!choice) return;
+  let referenceDate;
+  if (choice.value === 'yesterday') {
+    referenceDate = _yesterdayIso();
+  } else if (choice.value === 'suggested') {
+    referenceDate = document.getElementById('rewarm-date-suggested-row').dataset.iso;
+  } else {
+    referenceDate = document.getElementById('rewarm-date-custom-input').value;
+  }
+  if (!referenceDate) {
+    showToast('Escolha uma data válida', 'warning');
+    return;
+  }
+  closeRewarmDateModal();
+  await _openRewarmPreview(referenceDate);
+}
+
+
+async function _openRewarmPreview(referenceDate) {
+  currentReferenceDate = referenceDate;
   const modal = document.getElementById('rewarm-modal');
   const loading = document.getElementById('rewarm-modal-loading');
   const body = document.getElementById('rewarm-modal-body');
   const footer = document.getElementById('rewarm-modal-footer');
   const empty = document.getElementById('rewarm-modal-empty');
+  const reference = document.getElementById('rewarm-modal-reference');
 
   modal.hidden = false;
   loading.hidden = false;
   body.hidden = true;
   footer.hidden = true;
   empty.hidden = true;
+  reference.hidden = false;
+  reference.textContent = `Referência: ${_fmtDateShort(referenceDate)}`;
 
   try {
-    const resp = await fetch('/rewarm/preview', { method: 'POST' });
+    const resp = await fetch('/rewarm/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference_date: referenceDate }),
+    });
     if (!resp.ok) throw new Error(`preview failed ${resp.status}`);
-    const items = await resp.json();
+    const payload = await resp.json();
+    const items = Array.isArray(payload) ? payload : (payload.items || []);
     rewarmItems = items;
     renderRewarmModal(items);
   } catch (err) {
@@ -30,12 +138,25 @@ export async function startRewarmD1() {
   }
 }
 
+
+// Compat alias: alguns callers antigos ainda referenciam startRewarmD1.
+export async function startRewarmD1() {
+  return startRewarmLeads();
+}
+
+
 export function closeRewarmModal() {
   const modal = document.getElementById('rewarm-modal');
   modal.hidden = true;
   rewarmItems = [];
+  currentReferenceDate = null;
   document.getElementById('rewarm-send-list').innerHTML = '';
   document.getElementById('rewarm-skip-list').innerHTML = '';
+  const reference = document.getElementById('rewarm-modal-reference');
+  if (reference) {
+    reference.hidden = true;
+    reference.textContent = '';
+  }
 }
 
 function renderRewarmModal(items) {

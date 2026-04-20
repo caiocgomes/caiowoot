@@ -60,13 +60,15 @@ async def test_preview_returns_all_decisions(client, db):
 
     assert resp.status_code == 200
     body = resp.json()
-    assert isinstance(body, list)
-    assert len(body) == 3
+    assert "reference_date" in body
+    items = body["items"]
+    assert isinstance(items, list)
+    assert len(items) == 3
 
-    ids = {item["conversation_id"] for item in body}
+    ids = {item["conversation_id"] for item in items}
     assert ids == {c1, c2, c3}
 
-    for item in body:
+    for item in items:
         assert "item_id" in item
         assert "conversation_id" in item
         assert "action" in item
@@ -81,7 +83,9 @@ async def test_preview_returns_all_decisions(client, db):
 async def test_preview_returns_empty_when_no_candidates(client, db):
     resp = await client.post("/rewarm/preview")
     assert resp.status_code == 200
-    assert resp.json() == []
+    body = resp.json()
+    assert body["items"] == []
+    assert "reference_date" in body
 
 
 @pytest.mark.asyncio

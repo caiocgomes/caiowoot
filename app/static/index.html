@@ -77,7 +77,7 @@
   </div>
   <div id="campaign-list">
     <button id="campaign-new-btn" onclick="showCampaignForm()">+ Nova campanha</button>
-    <button id="rewarm-d1-btn" onclick="startRewarmD1()">Reesquentar D-1</button>
+    <button id="rewarm-d1-btn" onclick="startRewarmLeads()">Reesquentar leads</button>
     <button id="cold-rewarm-btn" onclick="startColdRewarm()">Cold Rewarm</button>
     <div id="campaign-items"></div>
   </div>
@@ -103,6 +103,37 @@
   </div>
 </div>
 
+<div id="rewarm-date-modal" class="rewarm-modal" hidden>
+  <div class="rewarm-modal-backdrop" onclick="closeRewarmDateModal()"></div>
+  <div class="rewarm-modal-panel rewarm-date-panel" role="dialog" aria-modal="true" aria-labelledby="rewarm-date-modal-title">
+    <div class="rewarm-modal-header">
+      <h2 id="rewarm-date-modal-title">Reesquentar leads de:</h2>
+      <button class="rewarm-modal-close" onclick="closeRewarmDateModal()" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="rewarm-date-body">
+      <label class="rewarm-date-option">
+        <input type="radio" name="rewarm-date-choice" value="yesterday" checked>
+        <span class="rewarm-date-label-main">Ontem</span>
+        <span class="rewarm-date-label-sub" id="rewarm-date-yesterday-sub"></span>
+      </label>
+      <label class="rewarm-date-option" id="rewarm-date-suggested-row" hidden>
+        <input type="radio" name="rewarm-date-choice" value="suggested">
+        <span class="rewarm-date-label-main" id="rewarm-date-suggested-main"></span>
+        <span class="rewarm-date-label-sub" id="rewarm-date-suggested-sub"></span>
+      </label>
+      <label class="rewarm-date-option">
+        <input type="radio" name="rewarm-date-choice" value="custom">
+        <span class="rewarm-date-label-main">Outra data</span>
+        <input type="date" id="rewarm-date-custom-input" class="rewarm-date-custom-input">
+      </label>
+    </div>
+    <div class="rewarm-modal-footer">
+      <button class="rewarm-card-remove" onclick="closeRewarmDateModal()">Cancelar</button>
+      <button id="rewarm-date-confirm-btn" onclick="confirmRewarmDate()">Gerar sugestões</button>
+    </div>
+  </div>
+</div>
+
 <div id="rewarm-modal" class="rewarm-modal" hidden>
   <div class="rewarm-modal-backdrop" onclick="closeRewarmModal()"></div>
   <div class="rewarm-modal-panel" role="dialog" aria-modal="true" aria-labelledby="rewarm-modal-title">
@@ -110,6 +141,7 @@
       <h2 id="rewarm-modal-title">Reesquentar D-1</h2>
       <button class="rewarm-modal-close" onclick="closeRewarmModal()" aria-label="Fechar">&times;</button>
     </div>
+    <div id="rewarm-modal-reference" class="rewarm-modal-reference" hidden></div>
     <div id="rewarm-modal-loading" class="rewarm-modal-loading">Gerando sugestões…</div>
     <div id="rewarm-modal-empty" class="rewarm-modal-empty" hidden>Nenhuma conversa elegível para reesquentamento no momento.</div>
     <div id="rewarm-modal-body" class="rewarm-modal-body" hidden>
