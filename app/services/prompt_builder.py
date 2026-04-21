@@ -247,6 +247,53 @@ def build_temporal_context(last_inbound_iso: str | None) -> str:
     return f"\n\n## Contexto temporal\nAgora são {now_str}. Última mensagem do cliente foi {elapsed}."
 
 
+async def _load_post_trigger_outbounds(
+    db,
+    conversation_id: int,
+    trigger_message_id: int | None,
+) -> list[dict]:
+    """Outbounds enviadas pelo operador desde o trigger (inclusive), em ordem cronológica.
+
+    Usa `id >= trigger_message_id` porque ids são monotonicamente crescentes em SQLite
+    e `id` da trigger inbound é sempre menor que ids de outbounds subsequentes na mesma
+    conversa. Isso evita problemas com timestamps iguais ao segundo.
+
+    Retorna lista vazia quando trigger_message_id é None ou não há outbounds posteriores.
+    """
+    if trigger_message_id is None:
+        return []
+    cursor = await db.execute(
+        """SELECT content, created_at, sent_by FROM messages
+           WHERE conversation_id = ?
+             AND direction = 'outbound'
+             AND id >= ?
+           ORDER BY created_at ASC, id ASC""",
+        (conversation_id, trigger_message_id),
+    )
+    rows = await cursor.fetchall()
+    return [
+        {"content": r["content"], "created_at": r["created_at"], "sent_by": r["sent_by"]}
+        for r in rows
+    ]
+
+
+def _format_post_trigger_section(outbounds: list[dict]) -> str:
+    """Formata a seção 'Respostas já enviadas neste turno' pro user_content."""
+    lines = ["## Respostas já enviadas neste turno"]
+    for m in outbounds:
+        sender = m.get("sent_by") or "operador"
+        lines.append(f"- [{m['created_at']}] {sender}: {m['content']}")
+    return "\n".join(lines)
+
+
+COMPLEMENTARY_FINAL_INSTRUCTION = (
+    "O cliente mandou a mensagem acima e você já começou a responder. Suas mensagens "
+    "já enviadas nesse turno estão listadas em 'Respostas já enviadas neste turno'. "
+    "O cliente ainda não respondeu. Gere um draft que complete o que ainda não foi "
+    "endereçado na mensagem do cliente, sem repetir o que você já disse."
+)
+
+
 async def build_prompt_parts(
     db,
     conversation_id: int,
@@ -254,6 +301,7 @@ async def build_prompt_parts(
     situation_summary: str | None = None,
     proactive: bool = False,
     operator_name: str | None = None,
+    trigger_message_id: int | None = None,
 ):
     conversation_history, first_name, last_inbound_iso = await build_conversation_history(db, conversation_id, operator_name)
 
@@ -328,10 +376,25 @@ async def build_prompt_parts(
     temporal_section = build_temporal_context(last_inbound_iso)
 
     display_name = operator_name or "Caio"
+
+    # Detecta outbounds posteriores ao trigger pra sinalizar resposta parcial em andamento.
+    # Ignorado no fluxo proactive (semântica própria: última foi do operador, gere continuação).
+    post_trigger_outbounds: list[dict] = []
+    if not proactive:
+        post_trigger_outbounds = await _load_post_trigger_outbounds(
+            db, conversation_id, trigger_message_id
+        )
+
     if proactive:
         final_instruction = f"A última mensagem da conversa foi enviada pelo {display_name}. Gere uma mensagem de continuação natural, retomando o contexto da conversa."
+    elif post_trigger_outbounds:
+        final_instruction = COMPLEMENTARY_FINAL_INSTRUCTION
     else:
         final_instruction = "Gere o draft de resposta para a última mensagem do cliente."
+
+    post_trigger_section = ""
+    if post_trigger_outbounds:
+        post_trigger_section = "\n\n" + _format_post_trigger_section(post_trigger_outbounds)
 
     user_content = f"""{few_shot_text}
 {attachments_section}
@@ -341,7 +404,7 @@ async def build_prompt_parts(
 ## Conversa atual
 
 {conversation_history}
-{temporal_section}
+{temporal_section}{post_trigger_section}
 
 {final_instruction}"""
 

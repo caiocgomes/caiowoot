@@ -142,7 +142,9 @@ async def generate_drafts(
         approach_modifiers = await _get_approach_modifiers()
 
         user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
+            db, conversation_id, operator_instruction,
+            proactive=proactive, operator_name=operator_name,
+            trigger_message_id=trigger_message_id,
         )
 
         full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
@@ -180,7 +182,9 @@ async def regenerate_draft(
         approach_modifiers = await _get_approach_modifiers()
 
         user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
-            db, conversation_id, operator_instruction, proactive=proactive, operator_name=operator_name
+            db, conversation_id, operator_instruction,
+            proactive=proactive, operator_name=operator_name,
+            trigger_message_id=trigger_message_id,
         )
         full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
         prompt_hash = save_prompt(full_prompt)
