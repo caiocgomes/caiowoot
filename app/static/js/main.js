@@ -8,7 +8,7 @@ import { showToast } from './ui/toast.js';
 import { assumeConversationApi } from './api.js';
 import { appendMessage } from './ui/messages.js';
 import { showDrafts, showDraftLoading, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
-import { initCompose, sendMessage, rewriteText, formalizeText, translateText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
+import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
 import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
 import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
 import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, hideReviewDetail, reviewGoBack, validateAnnotation, rejectAnnotation, showPromoteModal, closePromoteModal, confirmPromote, afterReviewAction, loadRules, renderRulesList, openRuleDetail, hideRuleDetail, toggleRule, saveRule, cancelRuleEdit } from './ui/review.js';
@@ -299,8 +299,6 @@ window.classifyConversation = classifyConversation;
 window.updateFunnelProduct = updateFunnelProduct;
 window.updateFunnelStage = updateFunnelStage;
 window.loadSuggestedAttachment = loadSuggestedAttachment;
-window.formalizeText = formalizeText;
-window.translateText = translateText;
 window.filterConversations = filterConversations;
 
 async function assumeConversation() {
