@@ -36,7 +36,8 @@ export function renderConversationList(conversations) {
     div.className = "conv-item" +
       (conv.id === state.currentConversationId ? " active" : "") +
       (conv.is_new ? " is-new" : conv.needs_reply ? " needs-reply" : "") +
-      (conv.is_qualified === 0 ? " qualifying" : "");
+      (conv.is_qualified === 0 ? " qualifying" : "") +
+      (conv.has_scheduled ? " has-scheduled" : "");
     div.onclick = () => { openConversation(conv.id); closeSidebar(); };
 
     const name = conv.contact_name || conv.phone_number;
@@ -52,11 +53,10 @@ export function renderConversationList(conversations) {
       : "";
 
     const dot = conv.is_new ? '<span class="conv-new-dot"></span>' : "";
-    const clock = conv.has_scheduled ? '<span class="conv-clock" title="Envio agendado">&#x1F551;</span>' : "";
 
     div.innerHTML = `
       <span class="conv-time">${time}</span>
-      <div class="conv-name">${dot}${escapeHtml(name)}${clock}</div>
+      <div class="conv-name">${dot}${escapeHtml(name)}</div>
       <div class="conv-preview">${escapeHtml(preview)}</div>
       ${responder}
     `;

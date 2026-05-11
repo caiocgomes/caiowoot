@@ -46,9 +46,6 @@
 .conv-time { font-size: 11px; color: var(--outline); float: right; }
 .conv-responder { font-size: 11px; color: var(--primary); margin-top: 2px; font-weight: 500; }
 
-/* Clock icon */
-.conv-clock { font-size: 12px; margin-left: var(--space-xs); vertical-align: middle; }
-
 /* Hamburger button - hidden on desktop, used in mobile chat view */
 #hamburger-btn { display: none; background: none; border: none; font-size: 22px; cursor: pointer; padding: var(--space-xs) var(--space-sm); margin-right: var(--space-sm); color: var(--on-primary); }
 
@@ -60,6 +57,9 @@
 /* Qualifying conversation indicator */
 .conv-item.qualifying { border-left: 3px solid var(--color-warning); }
 .conv-item.qualifying .conv-name::before { content: "🤖 "; }
+
+/* Scheduled send indicator: yellow line on right edge */
+.conv-item.has-scheduled { border-right: 3px solid var(--color-warning); }
 
 /* Sidebar backdrop */
 #sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-bg-overlay); z-index: 99; }
