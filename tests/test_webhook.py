@@ -153,3 +153,72 @@ async def test_inbound_message_cancels_pending_scheduled_sends(client, db):
 
     # Second was already sent → should remain sent
     assert sends[1]["status"] == "sent"
+
+
+@pytest.mark.asyncio
+async def test_webhook_background_tasks_tracked_in_task_registry(client, db):
+    """Contrato GREEN: módulo app/task_registry.py com spawn(coro) que cria
+    a task, guarda referência forte no set module-level PENDING_TASKS e a
+    descarta via done-callback. O webhook deve usar spawn() para as
+    background tasks, protegendo-as de garbage collection.
+
+    Hoje: red — o módulo app.task_registry ainda não existe (falha por
+    assert com mensagem explícita, não por erro de coleta).
+    """
+    import asyncio
+    import importlib
+
+    # Símbolo novo: resolvido dentro do corpo do teste, com falha clara
+    try:
+        task_registry = importlib.import_module("app.task_registry")
+    except ModuleNotFoundError:
+        task_registry = None
+    if task_registry is None:
+        pytest.fail(
+            "Contrato não implementado: módulo app/task_registry.py não existe. "
+            "Esperado: função spawn(coro) e set module-level PENDING_TASKS com "
+            "referências fortes às tasks em andamento."
+        )
+
+    spawn = getattr(task_registry, "spawn", None)
+    pending_tasks = getattr(task_registry, "PENDING_TASKS", None)
+    assert callable(spawn), "app.task_registry deve expor a função spawn(coro)"
+    assert isinstance(pending_tasks, set), (
+        "app.task_registry deve expor o set module-level PENDING_TASKS "
+        f"(valor atual: {pending_tasks!r})"
+    )
+
+    # Segura as tasks vivas brevemente, sincronizando via Event (sem sleeps longos)
+    release = asyncio.Event()
+
+    async def held_task(*args, **kwargs):
+        await asyncio.wait_for(release.wait(), timeout=2)
+
+    with patch("app.routes.webhook.auto_qualify_respond", held_task), \
+         patch("app.routes.webhook.generate_drafts", held_task), \
+         patch("app.routes.webhook.handle_reward_inbound", held_task), \
+         patch("app.routes.webhook.mark_cold_response_received", held_task):
+        payload = make_webhook_payload(message_id="msg-registry")
+        resp = await client.post("/webhook", json=payload)
+        assert resp.status_code == 200
+
+        # Durante a vida das tasks: PENDING_TASKS mantém referência forte
+        assert len(pending_tasks) >= 1, (
+            "Após o POST /webhook, PENDING_TASKS deveria conter pelo menos "
+            "1 task em andamento (referência forte contra garbage collection)"
+        )
+
+        alive = list(pending_tasks)
+        release.set()
+        await asyncio.wait(alive, timeout=2)
+
+    # Deixa os done-callbacks rodarem (call_soon precisa de ticks do loop)
+    for _ in range(20):
+        if not pending_tasks:
+            break
+        await asyncio.sleep(0.01)
+
+    assert len(pending_tasks) == 0, (
+        "PENDING_TASKS deveria esvaziar via done-callback após as tasks "
+        f"completarem, mas ainda contém: {pending_tasks!r}"
+    )

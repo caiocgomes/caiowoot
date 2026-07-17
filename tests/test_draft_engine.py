@@ -233,3 +233,103 @@ async def test_max_10_fewshot_examples(db, mock_claude_api):
     assert "Exemplos de como o Caio responde" in user_content
     example_count = user_content.count('Cliente disse:')
     assert example_count == 10
+
+
+# ───────────────────────── Contratos novos (refactor-velocidade): eventos WS ─────────────────────────
+# generate_drafts deve emitir 'drafts_generating' antes de qualquer chamada LLM
+# e 'drafts_error' quando a geração levanta exceção.
+
+import app.websocket_manager as ws_module  # noqa: E402  (atributo manager é patchado pelo conftest)
+
+
+def _broadcast_payloads(broadcast_mock, event_type):
+    """Extrai das chamadas ao mock de broadcast os payloads (dicts) do tipo pedido."""
+    payloads = []
+    for call in broadcast_mock.call_args_list:
+        for arg in list(call.args) + list(call.kwargs.values()):
+            if isinstance(arg, dict) and arg.get("type") == event_type:
+                payloads.append(arg)
+    return payloads
+
+
+@pytest.mark.asyncio
+async def test_generate_drafts_emits_drafts_generating_before_llm(db):
+    """generate_drafts emite 'drafts_generating' (draft_index=None) ANTES da primeira
+    chamada LLM de geração."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) "
+        "VALUES (1, 'msg-1', 'inbound', 'Quero saber sobre os cursos')"
+    )
+    await db.commit()
+
+    ordem = []
+    broadcast_mock = ws_module.manager.broadcast
+    broadcast_mock.reset_mock()
+
+    async def registra_broadcast(*args, **kwargs):
+        for arg in list(args) + list(kwargs.values()):
+            if isinstance(arg, dict) and arg.get("type") == "drafts_generating":
+                ordem.append(("drafts_generating", arg))
+
+    broadcast_mock.side_effect = registra_broadcast
+
+    async def registra_llm(*args, **kwargs):
+        ordem.append(("llm_call", None))
+        return ("Rascunho gerado", "Justificativa", None)
+
+    with patch(
+        "app.services.draft_engine._call_haiku",
+        new_callable=AsyncMock,
+        side_effect=registra_llm,
+    ):
+        await generate_drafts(1, 1)
+
+    generating = [i for i, (tipo, _) in enumerate(ordem) if tipo == "drafts_generating"]
+    llm_calls = [i for i, (tipo, _) in enumerate(ordem) if tipo == "llm_call"]
+
+    assert generating, "evento 'drafts_generating' não foi emitido pelo generate_drafts"
+    assert llm_calls, "mock de _call_haiku não foi chamado"
+    assert generating[0] < llm_calls[0], (
+        "'drafts_generating' deve ser emitido antes da primeira chamada LLM"
+    )
+
+    payload = ordem[generating[0]][1]
+    assert payload["conversation_id"] == 1
+    assert payload["trigger_message_id"] == 1
+    assert "draft_index" in payload and payload["draft_index"] is None
+
+
+@pytest.mark.asyncio
+async def test_generate_drafts_emits_drafts_error_on_exception(db):
+    """Quando a geração levanta exceção, generate_drafts emite 'drafts_error'
+    com conversation_id, trigger_message_id e error (string)."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number) VALUES ('5511999999999')"
+    )
+    await db.execute(
+        "INSERT INTO messages (conversation_id, evolution_message_id, direction, content) "
+        "VALUES (1, 'msg-1', 'inbound', 'Oi')"
+    )
+    await db.commit()
+
+    broadcast_mock = ws_module.manager.broadcast
+    broadcast_mock.reset_mock()
+
+    with patch(
+        "app.services.draft_engine._build_prompt_parts",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("falha simulada na geração"),
+    ):
+        await generate_drafts(1, 1)
+
+    erros = _broadcast_payloads(broadcast_mock, "drafts_error")
+    assert erros, "evento 'drafts_error' não foi emitido após exceção na geração"
+    payload = erros[-1]
+    assert payload["conversation_id"] == 1
+    assert payload["trigger_message_id"] == 1
+    assert isinstance(payload.get("error"), str) and payload["error"], (
+        "o campo 'error' deve ser uma string não-vazia"
+    )

@@ -260,3 +260,114 @@ async def test_generate_digest_invalid_json_fallback():
     assert result["patterns"] == []
     assert result["factual_issues_highlight"] == []
     assert result["salvageable_sales"] == []
+
+
+# ── Transação aberta atravessando chamada LLM ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_digest_loop_nao_segura_write_txn_durante_llm(tmp_path):
+    """Nenhuma write txn pode ficar aberta atravessando a chamada LLM do digest.
+
+    Cenário: dois operadores. Na iteração 1 do loop de digests o INSERT abre a
+    transação de escrita; na iteração 2 a chamada LLM bloqueia num Event.
+    Enquanto ela está bloqueada, uma segunda conexão (busy_timeout=500) precisa
+    conseguir fazer INSERT + commit sem 'database is locked'.
+
+    Hoje: red — o loop faz INSERT por operador e só commita no fim, então a
+    transação da iteração 1 segura o write lock durante a chamada LLM da
+    iteração 2.
+    """
+    import asyncio
+    import sqlite3
+
+    import aiosqlite
+
+    import app.database as db_module
+    from app.services.operator_coaching import _process_analysis
+
+    db_path = str(tmp_path / "coaching.db")
+
+    conn1 = await aiosqlite.connect(db_path)
+    conn1.row_factory = aiosqlite.Row
+    await conn1.execute("PRAGMA journal_mode=WAL")
+    await conn1.executescript(db_module.SCHEMA)
+    await conn1.commit()
+
+    # Dois operadores distintos → duas iterações no loop de digests
+    await conn1.execute("INSERT INTO conversations (phone_number, contact_name) VALUES ('5511111', 'Cliente 1')")
+    await conn1.execute("INSERT INTO conversations (phone_number, contact_name) VALUES ('5522222', 'Cliente 2')")
+    await conn1.execute(
+        "INSERT INTO messages (conversation_id, direction, content, sent_by, created_at) VALUES (1, 'inbound', 'Oi', NULL, '2026-03-01 10:00:00')"
+    )
+    await conn1.execute(
+        "INSERT INTO messages (conversation_id, direction, content, sent_by, created_at) VALUES (1, 'outbound', 'Ola!', 'Miguel', '2026-03-01 10:05:00')"
+    )
+    await conn1.execute(
+        "INSERT INTO messages (conversation_id, direction, content, sent_by, created_at) VALUES (2, 'inbound', 'Bom dia', NULL, '2026-03-01 11:00:00')"
+    )
+    await conn1.execute(
+        "INSERT INTO messages (conversation_id, direction, content, sent_by, created_at) VALUES (2, 'outbound', 'Oi!', 'Ana', '2026-03-01 11:10:00')"
+    )
+    cursor = await conn1.execute(
+        "INSERT INTO analysis_runs (period_start, period_end, status) VALUES ('2026-03-01', '2026-03-07', 'running')"
+    )
+    run_id = cursor.lastrowid
+    await conn1.commit()
+
+    async def fake_analyze(db_, conv_id, operator_name, period_start, period_end):
+        return _make_analysis_result(conv_id, operator_name)
+
+    llm_bloqueada = asyncio.Event()
+    liberar = asyncio.Event()
+    chamadas = {"n": 0}
+
+    async def fake_create(**kwargs):
+        chamadas["n"] += 1
+        if chamadas["n"] >= 2:
+            # Na segunda chamada o INSERT do digest da iteração 1 já aconteceu
+            llm_bloqueada.set()
+            await asyncio.wait_for(liberar.wait(), timeout=10)
+        return _make_digest_response()
+
+    mock_client = AsyncMock()
+    mock_client.messages.create = AsyncMock(side_effect=fake_create)
+
+    lock_error = None
+    with patch("app.services.operator_coaching.analyze_conversation", AsyncMock(side_effect=fake_analyze)), \
+         patch("app.services.operator_coaching.get_anthropic_client", return_value=mock_client):
+        task = asyncio.create_task(_process_analysis(conn1, run_id, "2026-03-01", "2026-03-07"))
+        try:
+            try:
+                await asyncio.wait_for(llm_bloqueada.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                if task.done() and task.exception():
+                    raise task.exception()
+                pytest.fail("mock LLM do digest nunca chegou à segunda chamada — setup do teste inválido")
+
+            # Segunda conexão tenta escrever enquanto a LLM está bloqueada
+            conn2 = await aiosqlite.connect(db_path)
+            try:
+                await conn2.execute("PRAGMA busy_timeout=500")
+                try:
+                    await conn2.execute(
+                        "INSERT INTO conversations (phone_number, contact_name) VALUES ('5533333', 'Concorrente')"
+                    )
+                    await conn2.execute(
+                        "UPDATE conversations SET contact_name = 'Concorrente 2' WHERE phone_number = '5533333'"
+                    )
+                    await conn2.commit()
+                except sqlite3.OperationalError as e:
+                    lock_error = e
+            finally:
+                await conn2.close()
+        finally:
+            liberar.set()
+            await asyncio.wait_for(task, timeout=10)
+
+    await conn1.close()
+
+    assert lock_error is None, (
+        f"segunda conexão levou '{lock_error}' — write txn ficou aberta "
+        "atravessando a chamada LLM do digest"
+    )

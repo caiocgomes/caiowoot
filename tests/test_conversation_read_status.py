@@ -100,3 +100,66 @@ async def test_needs_reply_false_when_last_message_outbound(client, db):
     assert len(conversations) == 1
     assert conversations[0]["needs_reply"] == 0
     assert conversations[0]["is_new"] == 0
+
+
+async def _get_last_read_at(db, conv_id):
+    """Helper: lê o valor atual de last_read_at da conversa."""
+    row = await db.execute(
+        "SELECT last_read_at FROM conversations WHERE id = ?", (conv_id,)
+    )
+    conv = await row.fetchone()
+    return conv["last_read_at"]
+
+
+@pytest.mark.asyncio
+async def test_last_read_at_throttled_to_30_seconds(client, db):
+    """Contrato GREEN: GET /conversations/{id} só atualiza last_read_at
+    se estiver NULL ou mais velho que 30 segundos (throttle).
+
+    Hoje: red — a rota atualiza incondicionalmente a cada GET.
+    """
+    conv_id = await _create_conversation_with_inbound(client, db)
+
+    # Fase 1: last_read_at NULL → primeiro GET seta o valor
+    resp = await client.get(f"/conversations/{conv_id}")
+    assert resp.status_code == 200
+    first_value = await _get_last_read_at(db, conv_id)
+    assert first_value is not None, "Primeiro GET deveria setar last_read_at (era NULL)"
+
+    # Fase 2: segundo GET imediato → não altera (mesma string)
+    await client.get(f"/conversations/{conv_id}")
+    second_value = await _get_last_read_at(db, conv_id)
+    assert second_value == first_value, (
+        "Segundo GET imediato não deveria alterar last_read_at (throttle de 30s), "
+        f"mas mudou de {first_value!r} para {second_value!r}"
+    )
+
+    # Fase 3: valor recente (10s atrás, dentro da janela de 30s) → não altera
+    await db.execute(
+        "UPDATE conversations SET last_read_at = datetime('now', '-10 seconds') WHERE id = ?",
+        (conv_id,),
+    )
+    await db.commit()
+    recent_value = await _get_last_read_at(db, conv_id)
+
+    await client.get(f"/conversations/{conv_id}")
+    after_recent = await _get_last_read_at(db, conv_id)
+    assert after_recent == recent_value, (
+        "GET com last_read_at de 10s atrás não deveria atualizar (throttle de 30s), "
+        f"mas mudou de {recent_value!r} para {after_recent!r}"
+    )
+
+    # Fase 4: valor antigo (60s atrás, fora da janela de 30s) → atualiza
+    await db.execute(
+        "UPDATE conversations SET last_read_at = datetime('now', '-60 seconds') WHERE id = ?",
+        (conv_id,),
+    )
+    await db.commit()
+    stale_value = await _get_last_read_at(db, conv_id)
+
+    await client.get(f"/conversations/{conv_id}")
+    after_stale = await _get_last_read_at(db, conv_id)
+    assert after_stale != stale_value, (
+        "GET com last_read_at de 60s atrás deveria atualizar o valor "
+        f"(mais velho que o throttle de 30s), mas permaneceu {stale_value!r}"
+    )

@@ -100,3 +100,66 @@ async def test_html_request_redirects_to_login():
             resp = await client.get("/", headers={"Accept": "text/html"})
     assert resp.status_code == 302
     assert "/login.html" in resp.headers.get("location", "")
+
+
+# --- Contrato GREEN (refactor-velocidade): cache de assets estáticos ---
+# .js e .css → 'private, max-age=300, stale-while-revalidate=600'
+# .html e '/' → 'no-cache' (sem no-store)
+# Hoje: red — o middleware manda 'no-cache, no-store, must-revalidate' em tudo.
+
+SWR_CACHE_HEADER = "private, max-age=300, stale-while-revalidate=600"
+
+
+async def _get_cache_control(path: str) -> str:
+    """Helper: faz GET no path e retorna o header Cache-Control."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(path)
+    assert resp.status_code == 200, f"GET {path} deveria retornar 200, veio {resp.status_code}"
+    return resp.headers.get("Cache-Control", "")
+
+
+@pytest.mark.asyncio
+async def test_js_asset_cache_control_allows_swr():
+    """Assets .js recebem cache privado com stale-while-revalidate."""
+    header = await _get_cache_control("/app.js")
+    assert header == SWR_CACHE_HEADER, (
+        f"GET /app.js deveria retornar Cache-Control {SWR_CACHE_HEADER!r}, "
+        f"veio {header!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_css_asset_cache_control_allows_swr():
+    """Assets .css recebem cache privado com stale-while-revalidate."""
+    header = await _get_cache_control("/css/base.css")
+    assert header == SWR_CACHE_HEADER, (
+        f"GET /css/base.css deveria retornar Cache-Control {SWR_CACHE_HEADER!r}, "
+        f"veio {header!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_html_cache_control_no_cache_without_no_store():
+    """Páginas .html recebem no-cache (revalida sempre), sem no-store."""
+    header = await _get_cache_control("/coaching.html")
+    assert "no-cache" in header, (
+        f"GET /coaching.html deveria retornar Cache-Control com no-cache, veio {header!r}"
+    )
+    assert "no-store" not in header, (
+        "GET /coaching.html não deveria mais retornar no-store "
+        f"(contrato novo: apenas no-cache), veio {header!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_root_cache_control_no_cache_without_no_store():
+    """A raiz '/' (index.html) recebe no-cache, sem no-store."""
+    header = await _get_cache_control("/")
+    assert "no-cache" in header, (
+        f"GET / deveria retornar Cache-Control com no-cache, veio {header!r}"
+    )
+    assert "no-store" not in header, (
+        "GET / não deveria mais retornar no-store "
+        f"(contrato novo: apenas no-cache), veio {header!r}"
+    )

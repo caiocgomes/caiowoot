@@ -209,3 +209,66 @@ async def test_process_due_sends_reverts_on_failure(db):
     row = await db.execute("SELECT status FROM scheduled_sends WHERE id = ?", (send_id,))
     record = await row.fetchone()
     assert record["status"] == "pending"
+
+
+# ── 3. Tick sem sends devidos não escreve no banco ──────────────────
+
+
+class _SpyConn:
+    """Espião de conexão: registra statements e commits; close vira no-op."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.statements = []
+        self.commit_count = 0
+
+    async def execute(self, sql, *args, **kwargs):
+        self.statements.append(" ".join(sql.split()).lower())
+        return await self._conn.execute(sql, *args, **kwargs)
+
+    async def commit(self):
+        self.commit_count += 1
+        await self._conn.commit()
+
+    async def close(self):
+        pass  # conexão compartilhada do teste, não fechar
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+@pytest.mark.asyncio
+async def test_tick_sem_sends_devidos_nao_emite_update_nem_commit(db):
+    """Tick do scheduler sem sends devidos não pode emitir UPDATE nem commit.
+
+    Hoje: red — _process_due_sends faz UPDATE em scheduled_sends + commit
+    incondicionalmente a cada tick, mesmo sem nada devido. O contrato novo
+    exige checar antes de escrever (tick barato quando não há nada devido).
+    """
+    conv_id = await insert_conversation(db)
+    # Send pendente mas no futuro: existe linha na tabela, nada está devido
+    await insert_scheduled_send(db, conv_id, content="Só no futuro", send_at="2099-12-31T23:59:00")
+
+    spy = _SpyConn(db)
+
+    async def spy_get_db():
+        return spy
+
+    mock_execute = AsyncMock()
+
+    with patch("app.services.scheduler.get_db", spy_get_db), \
+         patch("app.services.scheduler.execute_send", mock_execute):
+        from app.services.scheduler import _process_due_sends
+        await _process_due_sends()
+
+    mock_execute.assert_not_called()
+
+    updates_scheduled = [
+        s for s in spy.statements if s.startswith("update") and "scheduled_sends" in s
+    ]
+    assert updates_scheduled == [], (
+        f"tick sem sends devidos emitiu UPDATE em scheduled_sends: {updates_scheduled}"
+    )
+    assert spy.commit_count == 0, (
+        f"tick sem sends devidos chamou commit {spy.commit_count}x; não deveria escrever nada"
+    )
