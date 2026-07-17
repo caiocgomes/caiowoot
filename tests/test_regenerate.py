@@ -93,8 +93,8 @@ async def test_regenerate_all_drafts(db, mock_claude_api):
     assert new_drafts[1]["draft_text"] == "Regen consultiva"
     assert new_drafts[2]["draft_text"] == "Regen casual"
 
-    # Same group ID is reused
-    assert new_drafts[0]["draft_group_id"] == original_group_id
+    # Swap atômico: o grupo novo substitui o antigo, sem reusar o group_id
+    assert new_drafts[0]["draft_group_id"] != original_group_id
 
     # 3 Claude calls for full regeneration
     assert mock_claude_api.messages.create.call_count == 3

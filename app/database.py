@@ -233,6 +233,11 @@ CREATE TABLE IF NOT EXISTS cold_dispatches (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cron_runs_slot_date ON cron_runs(slot_key, DATE(ran_at));
+CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conv_dir_created ON messages(conversation_id, direction, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scheduled_sends_conv_status ON scheduled_sends(conversation_id, status);
+CREATE INDEX IF NOT EXISTS idx_drafts_group ON drafts(draft_group_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_contacts_phone ON campaign_contacts(phone_number);
 CREATE INDEX IF NOT EXISTS idx_cold_dispatches_conv_created ON cold_dispatches(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_cold_dispatches_action_status_created ON cold_dispatches(action, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_cold_dispatches_scheduled_send ON cold_dispatches(scheduled_send_id);
@@ -473,6 +478,18 @@ MIGRATIONS = [
      "ALTER TABLE conversations ADD COLUMN cold_do_not_contact INTEGER DEFAULT 0"),
     ("cold_dispatches_stage_reached",
      "ALTER TABLE cold_dispatches ADD COLUMN stage_reached TEXT"),
+    ("idx_messages_conv_created",
+     "CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(conversation_id, created_at DESC)"),
+    ("idx_messages_conv_dir_created",
+     "CREATE INDEX IF NOT EXISTS idx_messages_conv_dir_created ON messages(conversation_id, direction, created_at DESC)"),
+    ("idx_scheduled_sends_conv_status",
+     "CREATE INDEX IF NOT EXISTS idx_scheduled_sends_conv_status ON scheduled_sends(conversation_id, status)"),
+    ("idx_drafts_group",
+     "CREATE INDEX IF NOT EXISTS idx_drafts_group ON drafts(draft_group_id)"),
+    ("idx_campaign_contacts_phone",
+     "CREATE INDEX IF NOT EXISTS idx_campaign_contacts_phone ON campaign_contacts(phone_number)"),
+    ("drop_idx_messages_conversation_id",
+     "DROP INDEX IF EXISTS idx_messages_conversation_id"),
 ]
 
 _chroma_client = None
@@ -492,17 +509,25 @@ def get_chroma_collection():
     return _chroma_collection
 
 
-async def get_db() -> aiosqlite.Connection:
-    """Create a standalone DB connection. Used by background tasks that run outside request context."""
+async def _connect() -> aiosqlite.Connection:
+    """Abre conexão configurada: escritores esperam o lock (busy_timeout),
+    fsync reduzido adequado a WAL (synchronous=NORMAL) e FKs ligadas."""
     db = await aiosqlite.connect(settings.database_path)
     db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA busy_timeout = 10000")
+    await db.execute("PRAGMA synchronous = NORMAL")
+    await db.execute("PRAGMA foreign_keys = ON")
     return db
+
+
+async def get_db() -> aiosqlite.Connection:
+    """Create a standalone DB connection. Used by background tasks that run outside request context."""
+    return await _connect()
 
 
 async def get_db_connection():
     """FastAPI dependency that provides a DB connection per request."""
-    db = await aiosqlite.connect(settings.database_path)
-    db.row_factory = aiosqlite.Row
+    db = await _connect()
     try:
         yield db
     finally:

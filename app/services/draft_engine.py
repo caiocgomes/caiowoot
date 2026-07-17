@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 
 import anthropic
@@ -48,28 +49,46 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = None  # Now built dynamically via _build_system_prompt()
 APPROACH_MODIFIERS = None  # Now built dynamically via _get_approach_modifiers()
 
+# Lock por conversa para a seção crítica do regenerate-all: serializa o swap
+# INSERT novo grupo + DELETE dos antigos, evitando estados com 0 ou 2 grupos.
+_regenerate_locks: dict[int, asyncio.Lock] = {}
 
-async def _generate_draft_group(
-    db,
-    conversation_id: int,
-    trigger_message_id: int,
+
+def _regenerate_lock(conversation_id: int) -> asyncio.Lock:
+    lock = _regenerate_locks.get(conversation_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _regenerate_locks[conversation_id] = lock
+    return lock
+
+
+async def _call_variations(
     approach_modifiers: list[tuple[str, str]],
     user_content: str,
     system_prompt: str,
     rules_section: str,
     knowledge_section: str,
+) -> list:
+    """Dispara as chamadas Haiku das variações em paralelo."""
+    tasks = [
+        _call_haiku(user_content, modifier, system_prompt, rules_section, knowledge_section)
+        for _, modifier in approach_modifiers
+    ]
+    return await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _insert_draft_group(
+    db,
+    conversation_id: int,
+    trigger_message_id: int,
+    approach_modifiers: list[tuple[str, str]],
+    results: list,
     situation_summary: str | None,
     prompt_hash: str,
     operator_instruction: str | None,
     draft_group_id: str,
 ) -> list[dict]:
-    """Generate a full set of draft variations and insert them into the DB."""
-    tasks = [
-        _call_haiku(user_content, modifier, system_prompt, rules_section, knowledge_section)
-        for _, modifier in approach_modifiers
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
+    """Insere no banco os drafts de um grupo a partir dos resultados das variações."""
     drafts = []
     for i, (approach_name, _) in enumerate(approach_modifiers):
         if isinstance(results[i], Exception):
@@ -129,6 +148,75 @@ async def _broadcast_drafts(db, conversation_id: int, draft_group_id: str, draft
     )
 
 
+async def _broadcast_generating(conversation_id: int, trigger_message_id: int, draft_index: int | None):
+    """Sinaliza ao frontend que uma geração começou (antes de qualquer chamada LLM)."""
+    from app.websocket_manager import manager
+    await manager.broadcast(
+        conversation_id,
+        {
+            "type": "drafts_generating",
+            "conversation_id": conversation_id,
+            "trigger_message_id": trigger_message_id,
+            "draft_index": draft_index,
+        },
+    )
+
+
+async def _broadcast_error(conversation_id: int, trigger_message_id: int, exc: Exception):
+    """Sinaliza falha de geração; falha do próprio broadcast não pode propagar."""
+    try:
+        from app.websocket_manager import manager
+        await manager.broadcast(
+            conversation_id,
+            {
+                "type": "drafts_error",
+                "conversation_id": conversation_id,
+                "trigger_message_id": trigger_message_id,
+                "error": str(exc)[:200],
+            },
+        )
+    except Exception:
+        logger.exception("Failed to broadcast drafts_error for conversation %d", conversation_id)
+
+
+async def _load_stored_summary(db, conversation_id: int) -> str | None:
+    """Resumo de situação não-nulo mais recente já armazenado nos drafts da conversa."""
+    row = await db.execute(
+        """SELECT situation_summary FROM drafts
+           WHERE conversation_id = ? AND situation_summary IS NOT NULL AND situation_summary != ''
+           ORDER BY created_at DESC, id DESC LIMIT 1""",
+        (conversation_id,),
+    )
+    found = await row.fetchone()
+    return found["situation_summary"] if found else None
+
+
+def _log_timing(
+    conversation_id: int,
+    draft_group_id: str,
+    timings: dict,
+    llm_ms: float,
+    commit_ms: float,
+    start: float,
+):
+    total_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "draft_timing conv=%d group=%s summary_ms=%d retrieval_ms=%d llm_ms=%d commit_ms=%d total_ms=%d",
+        conversation_id,
+        draft_group_id,
+        timings.get("summary_ms", 0),
+        timings.get("retrieval_ms", 0),
+        llm_ms,
+        commit_ms,
+        total_ms,
+    )
+    if commit_ms > 100:
+        logger.warning(
+            "Commit lento na geração de drafts: %dms (conv=%d group=%s)",
+            commit_ms, conversation_id, draft_group_id,
+        )
+
+
 async def generate_drafts(
     conversation_id: int,
     trigger_message_id: int,
@@ -136,34 +224,49 @@ async def generate_drafts(
     proactive: bool = False,
     operator_name: str | None = None,
 ):
+    start = time.perf_counter()
     db = await get_db()
     try:
+        await _broadcast_generating(conversation_id, trigger_message_id, None)
+
         system_prompt = await _build_system_prompt(operator_name)
         approach_modifiers = await _get_approach_modifiers()
 
+        timings: dict = {}
         user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
             db, conversation_id, operator_instruction,
             proactive=proactive, operator_name=operator_name,
             trigger_message_id=trigger_message_id,
+            timings=timings,
         )
 
         full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
-        prompt_hash = save_prompt(full_prompt)
+        prompt_hash = await asyncio.to_thread(save_prompt, full_prompt)
 
         draft_group_id = str(uuid.uuid4())
 
-        drafts = await _generate_draft_group(
+        llm_start = time.perf_counter()
+        results = await _call_variations(
+            approach_modifiers, user_content, system_prompt, rules_section, knowledge_section,
+        )
+        llm_ms = (time.perf_counter() - llm_start) * 1000
+
+        drafts = await _insert_draft_group(
             db, conversation_id, trigger_message_id,
-            approach_modifiers, user_content, system_prompt,
-            rules_section, knowledge_section, situation_summary,
+            approach_modifiers, results, situation_summary,
             prompt_hash, operator_instruction, draft_group_id,
         )
 
+        commit_start = time.perf_counter()
         await db.commit()
+        commit_ms = (time.perf_counter() - commit_start) * 1000
+
+        _log_timing(conversation_id, draft_group_id, timings, llm_ms, commit_ms, start)
         await _broadcast_drafts(db, conversation_id, draft_group_id, drafts, situation_summary)
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to generate drafts for conversation %d", conversation_id)
+        await _broadcast_error(conversation_id, trigger_message_id, exc)
     finally:
         await db.close()
 
@@ -176,22 +279,34 @@ async def regenerate_draft(
     proactive: bool = False,
     operator_name: str | None = None,
 ):
+    start = time.perf_counter()
     db = await get_db()
     try:
+        await _broadcast_generating(conversation_id, trigger_message_id, draft_index)
+
         system_prompt = await _build_system_prompt(operator_name)
         approach_modifiers = await _get_approach_modifiers()
 
+        # Reusa o resumo já armazenado: regenerar não muda a situação da conversa
+        # e economiza uma chamada LLM inteira antes das variações.
+        stored_summary = await _load_stored_summary(db, conversation_id)
+
+        timings: dict = {}
         user_content, situation_summary, rules_section, knowledge_section = await _build_prompt_parts(
             db, conversation_id, operator_instruction,
+            situation_summary=stored_summary,
             proactive=proactive, operator_name=operator_name,
             trigger_message_id=trigger_message_id,
+            timings=timings,
         )
         full_prompt = system_prompt + rules_section + knowledge_section + "\n\n" + user_content
-        prompt_hash = save_prompt(full_prompt)
+        prompt_hash = await asyncio.to_thread(save_prompt, full_prompt)
 
         if draft_index is not None:
             approach_name, modifier = approach_modifiers[draft_index]
+            llm_start = time.perf_counter()
             draft_text, justification, suggested_attachment = await _call_haiku(user_content, modifier, system_prompt, rules_section, knowledge_section)
+            llm_ms = (time.perf_counter() - llm_start) * 1000
 
             row = await db.execute(
                 """SELECT id, draft_group_id FROM drafts
@@ -207,7 +322,9 @@ async def regenerate_draft(
                     (draft_text, justification, prompt_hash, operator_instruction, situation_summary, suggested_attachment, existing["id"]),
                 )
                 draft_group_id = existing["draft_group_id"]
+            commit_start = time.perf_counter()
             await db.commit()
+            commit_ms = (time.perf_counter() - commit_start) * 1000
 
             row = await db.execute(
                 "SELECT * FROM drafts WHERE draft_group_id = ? ORDER BY variation_index",
@@ -224,32 +341,37 @@ async def regenerate_draft(
             } for d in all_drafts]
 
         else:
-            row = await db.execute(
-                """SELECT draft_group_id FROM drafts
-                   WHERE conversation_id = ? AND trigger_message_id = ? AND status = 'pending'
-                   ORDER BY created_at DESC LIMIT 1""",
-                (conversation_id, trigger_message_id),
+            # Swap atômico: gera com grupo NOVO, insere e só então remove os
+            # grupos pending antigos na mesma transação — leitor nunca vê zero grupos.
+            draft_group_id = str(uuid.uuid4())
+
+            llm_start = time.perf_counter()
+            results = await _call_variations(
+                approach_modifiers, user_content, system_prompt, rules_section, knowledge_section,
             )
-            existing = await row.fetchone()
-            draft_group_id = existing["draft_group_id"] if existing else str(uuid.uuid4())
+            llm_ms = (time.perf_counter() - llm_start) * 1000
 
-            await db.execute(
-                "DELETE FROM drafts WHERE draft_group_id = ?",
-                (draft_group_id,),
-            )
+            async with _regenerate_lock(conversation_id):
+                drafts = await _insert_draft_group(
+                    db, conversation_id, trigger_message_id,
+                    approach_modifiers, results, situation_summary,
+                    prompt_hash, operator_instruction, draft_group_id,
+                )
+                await db.execute(
+                    """DELETE FROM drafts
+                       WHERE conversation_id = ? AND trigger_message_id = ?
+                         AND status = 'pending' AND draft_group_id != ?""",
+                    (conversation_id, trigger_message_id, draft_group_id),
+                )
+                commit_start = time.perf_counter()
+                await db.commit()
+                commit_ms = (time.perf_counter() - commit_start) * 1000
 
-            drafts = await _generate_draft_group(
-                db, conversation_id, trigger_message_id,
-                approach_modifiers, user_content, system_prompt,
-                rules_section, knowledge_section, situation_summary,
-                prompt_hash, operator_instruction, draft_group_id,
-            )
-
-            await db.commit()
-
+        _log_timing(conversation_id, draft_group_id, timings, llm_ms, commit_ms, start)
         await _broadcast_drafts(db, conversation_id, draft_group_id, drafts, situation_summary)
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to regenerate drafts for conversation %d", conversation_id)
+        await _broadcast_error(conversation_id, trigger_message_id, exc)
     finally:
         await db.close()

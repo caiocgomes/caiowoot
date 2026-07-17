@@ -40,7 +40,13 @@ DRAFT_TOOL = {
 def get_anthropic_client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        # Timeout curto e poucos retries: draft pendurado atrás de chamada
+        # travada é pior que falhar rápido e cair no fallback de erro.
+        _client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            timeout=30.0,
+            max_retries=2,
+        )
     return _client
 
 

@@ -4,7 +4,9 @@ Builds system prompts, conversation history, few-shot examples,
 and approach modifiers for draft generation.
 """
 
+import asyncio
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +19,10 @@ from app.services.smart_retrieval import retrieve_similar
 logger = logging.getLogger(__name__)
 
 ATTACHMENTS_DIR = Path(__file__).resolve().parent.parent.parent / "knowledge" / "attachments"
+
+# Janela máxima de histórico no prompt: conversas longas param de crescer
+# o custo de tokens e a latência da geração.
+MAX_HISTORY_MESSAGES = 100
 
 
 def list_known_attachments() -> list[str]:
@@ -120,8 +126,12 @@ async def build_conversation_history(db, conversation_id: int, operator_name: st
     display_name = operator_name or "Caio"
 
     rows = await db.execute(
-        "SELECT direction, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
-        (conversation_id,),
+        """SELECT direction, content, created_at FROM (
+               SELECT id, direction, content, created_at FROM messages
+               WHERE conversation_id = ?
+               ORDER BY created_at DESC, id DESC LIMIT ?
+           ) ORDER BY created_at ASC, id ASC""",
+        (conversation_id, MAX_HISTORY_MESSAGES),
     )
     messages = await rows.fetchall()
 
@@ -302,10 +312,12 @@ async def build_prompt_parts(
     proactive: bool = False,
     operator_name: str | None = None,
     trigger_message_id: int | None = None,
+    timings: dict | None = None,
 ):
     conversation_history, first_name, last_inbound_iso = await build_conversation_history(db, conversation_id, operator_name)
 
     # Generate situation summary if not provided
+    summary_start = time.perf_counter()
     if situation_summary is None:
         try:
             summary_result = await generate_situation_summary(
@@ -329,15 +341,21 @@ async def build_prompt_parts(
                     f"UPDATE conversations SET {', '.join(updates)} WHERE id = ?",
                     params,
                 )
+                # Commit imediato: a transação de escrita não pode atravessar
+                # as chamadas Haiku segurando o write lock do arquivo.
+                await db.commit()
         except Exception:
             logger.exception("Failed to generate situation summary")
             situation_summary = None
+    if timings is not None:
+        timings["summary_ms"] = (time.perf_counter() - summary_start) * 1000
 
     # Smart retrieval based on situation summary
+    retrieval_start = time.perf_counter()
     few_shot_text = ""
     if situation_summary:
         try:
-            similar_ids = retrieve_similar(situation_summary, k=5)
+            similar_ids = await asyncio.to_thread(retrieve_similar, situation_summary, k=5)
             if similar_ids:
                 few_shot_text = await build_fewshot_from_retrieval(db, similar_ids)
         except Exception:
@@ -346,6 +364,8 @@ async def build_prompt_parts(
     # Fallback to chronological if smart retrieval yielded nothing
     if not few_shot_text:
         few_shot_text = await build_fewshot_fallback(db)
+    if timings is not None:
+        timings["retrieval_ms"] = (time.perf_counter() - retrieval_start) * 1000
 
     knowledge = load_knowledge_base()
 
