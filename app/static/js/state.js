@@ -26,5 +26,7 @@ const state = {
   lastMessageDate: null,
   scheduledSends: [],
   wsPingInterval: null,
+  draftsGenerating: false,
+  generatingConvs: new Set(),
 };
 export default state;

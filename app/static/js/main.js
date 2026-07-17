@@ -2,17 +2,17 @@ import state from './state.js';
 import { connectWS, on as wsOn } from './ws.js';
 import { notifyInbound, updateTitleBadge, initNotificationButton, setOpenConversation } from './notifications.js';
 
-import { loadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar, filterConversations } from './ui/conversations.js';
+import { loadConversations, scheduleLoadConversations, openConversation, renderConversationList, closeSidebar, toggleSidebar, filterConversations } from './ui/conversations.js';
 import { isMobile } from './utils.js';
 import { showToast } from './ui/toast.js';
 import { assumeConversationApi } from './api.js';
 import { appendMessage } from './ui/messages.js';
-import { showDrafts, showDraftLoading, selectDraft, pollForUpdatedDrafts, regenerateDraft, regenerateAll } from './ui/drafts.js';
+import { showDrafts, setDraftsGenerating, restoreDraftsAfterError, refreshCurrentConversationDrafts } from './ui/drafts.js';
 import { initCompose, sendMessage, rewriteText, handleFileSelect, removeAttachment, loadSuggestedAttachment, loadQuickAttachButtons } from './ui/compose.js';
 import { initScheduleUI, loadScheduledSends, addScheduledPill, removeScheduledPill, cancelScheduledSend, computeSendAt, scheduleMessage, toggleScheduleDropdown, closeScheduleDropdown } from './ui/schedule.js';
 import { loadKnowledgeDocs, openDoc, saveDoc, deleteDoc, showNewDocForm, cancelNewDoc, createDoc } from './ui/knowledge.js';
 import { loadReviewItems, renderReviewStats, renderReviewList, openReviewItem, hideReviewDetail, reviewGoBack, validateAnnotation, rejectAnnotation, showPromoteModal, closePromoteModal, confirmPromote, afterReviewAction, loadRules, renderRulesList, openRuleDetail, hideRuleDetail, toggleRule, saveRule, cancelRuleEdit } from './ui/review.js';
-import { loadCampaigns, openCampaignDetail, showCampaignForm, cancelCampaignForm, createCampaign, generateFormVariations, editFormVariation, createAndStartCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
+import { loadCampaigns, openCampaignDetail, updateCampaignProgress, showCampaignForm, cancelCampaignForm, createCampaign, generateFormVariations, editFormVariation, createAndStartCampaign, generateVariations, editVariation, startCampaign, pauseCampaign, resumeCampaign, retryCampaign, hideCampaignPanels } from './ui/campaigns.js';
 import { openSettings, closeSettings, switchSettingsTab, loadSettingsPrompts, loadSettingsProfile, renderSettingsTab, saveSettings, resetPrompt } from './ui/settings.js';
 import { renderContextPanel, updateFunnelProduct, classifyConversation, updateFunnelStage } from './ui/context-panel.js';
 import { startRewarmLeads, startRewarmD1, closeRewarmModal, sendRewarmBatch, closeRewarmDateModal, confirmRewarmDate } from './ui/rewarm.js';
@@ -127,18 +127,33 @@ wsOn("new_message", (data) => {
   if (data.message.direction === "inbound") {
     notifyInbound(data.conversation_id, data.message.content);
   }
-  loadConversations();
+  scheduleLoadConversations();
   if (data.conversation_id === state.currentConversationId) {
     appendMessage(data.message);
     if (data.message.direction === "inbound") {
       state.lastTriggerMessageId = data.message.id;
-      showDraftLoading();
+      setDraftsGenerating(null);
     }
+  }
+});
+
+wsOn("drafts_generating", (data) => {
+  state.generatingConvs.add(data.conversation_id);
+  if (data.conversation_id === state.currentConversationId) {
+    setDraftsGenerating(data.draft_index ?? null);
+  }
+});
+
+wsOn("drafts_error", (data) => {
+  state.generatingConvs.delete(data.conversation_id);
+  if (data.conversation_id === state.currentConversationId) {
+    restoreDraftsAfterError("Erro ao gerar sugestões");
   }
 });
 
 wsOn("drafts_ready", (data) => {
   console.log("drafts_ready received, drafts count:", data.drafts?.length, "match:", data.conversation_id === state.currentConversationId);
+  state.generatingConvs.delete(data.conversation_id);
   if (data.conversation_id === state.currentConversationId) {
     showDrafts(data.drafts, data.draft_group_id);
     // Update context panel with AI classification
@@ -149,44 +164,46 @@ wsOn("drafts_ready", (data) => {
       );
     }
   }
-  loadConversations();
+  scheduleLoadConversations();
+});
+
+// Reconexão do WS: eventos podem ter se perdido; ressincroniza se havia geração pendente
+wsOn("ws_connected", () => {
+  if (state.draftsGenerating) {
+    refreshCurrentConversationDrafts();
+  }
 });
 
 wsOn("message_sent", (data) => {
   if (data.conversation_id === state.currentConversationId) {
     appendMessage(data.message);
   }
-  loadConversations();
+  scheduleLoadConversations();
 });
 
 wsOn("scheduled_send_created", (data) => {
   if (data.conversation_id === state.currentConversationId) {
     addScheduledPill(data.scheduled_send);
   }
-  loadConversations();
+  scheduleLoadConversations();
 });
 
 wsOn("scheduled_send_cancelled", (data) => {
   if (data.conversation_id === state.currentConversationId) {
     removeScheduledPill(data.scheduled_send_id);
   }
-  loadConversations();
+  scheduleLoadConversations();
 });
 
 wsOn("scheduled_send_completed", (data) => {
   if (data.conversation_id === state.currentConversationId) {
     removeScheduledPill(data.scheduled_send_id);
   }
-  loadConversations();
+  scheduleLoadConversations();
 });
 
 wsOn("campaign_progress", (data) => {
-  if (state.currentTab === "campaigns" && state.currentCampaignId === data.campaign_id) {
-    openCampaignDetail(data.campaign_id);
-  }
-  if (state.currentTab === "campaigns") {
-    loadCampaigns();
-  }
+  updateCampaignProgress(data);
 });
 
 function setQualifyingUI(isQualifying) {
@@ -195,7 +212,7 @@ function setQualifyingUI(isQualifying) {
 }
 
 wsOn("conversation_qualified", (data) => {
-  loadConversations();
+  scheduleLoadConversations();
   if (data.conversation_id === state.currentConversationId) {
     setQualifyingUI(false);
     // Update context panel with summary from qualifying
@@ -209,7 +226,7 @@ wsOn("conversation_qualified", (data) => {
 });
 
 wsOn("conversation_assumed", (data) => {
-  loadConversations();
+  scheduleLoadConversations();
   if (data.conversation_id === state.currentConversationId) {
     setQualifyingUI(false);
   }
@@ -307,7 +324,7 @@ async function assumeConversation() {
   if (res.ok) {
     setQualifyingUI(false);
     showToast("Conversa assumida!", "success");
-    loadConversations();
+    scheduleLoadConversations();
   }
 }
 window.assumeConversation = assumeConversation;

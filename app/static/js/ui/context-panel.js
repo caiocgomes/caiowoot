@@ -1,5 +1,7 @@
 import state from '../state.js';
 import { classifyConversationApi, updateFunnelApi } from '../api.js';
+import { setBtnLoading } from '../utils.js';
+import { showToast } from './toast.js';
 
 export const FUNNEL_STAGES = ["qualifying", "decided", "handbook_sent", "link_sent", "purchased"];
 
@@ -33,8 +35,7 @@ export async function updateFunnelProduct(value) {
 export async function classifyConversation() {
   if (!state.currentConversationId) return;
   const btn = document.getElementById("ctx-classify-btn");
-  btn.disabled = true;
-  btn.textContent = "Analisando...";
+  setBtnLoading(btn, true, "Analisando...");
   try {
     const res = await classifyConversationApi(state.currentConversationId);
     if (res.ok) {
@@ -45,16 +46,14 @@ export async function classifyConversation() {
       );
     } else {
       console.error("Classify failed:", res.status);
-      btn.textContent = "Erro - tentar de novo";
-      return;
+      showToast("Erro ao classificar a conversa", "error");
     }
   } catch (e) {
     console.error("Classify error:", e);
-    btn.textContent = "Erro - tentar de novo";
-    return;
+    showToast("Erro ao classificar a conversa", "error");
+  } finally {
+    setBtnLoading(btn, false);
   }
-  btn.disabled = false;
-  btn.textContent = "Atualizar";
 }
 
 export async function updateFunnelStage(stage) {

@@ -35,6 +35,8 @@ export function connectWS() {
 
   state.ws.onopen = () => {
     updateWsStatus(true);
+    // Evento interno: permite ressincronizar estado perdido durante a desconexão
+    dispatch({ type: 'ws_connected' });
     clearInterval(state.wsPingInterval);
     state.wsPingInterval = setInterval(() => {
       if (state.ws.readyState === WebSocket.OPEN) {

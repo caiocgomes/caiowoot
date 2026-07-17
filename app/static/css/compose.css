@@ -183,3 +183,14 @@
 
 /* Draft loading */
 .draft-loading { padding: 16px; text-align: center; color: var(--outline); font-size: 13px; font-style: italic; }
+
+/* Card individual em regeneração */
+.draft-card.loading {
+  pointer-events: none;
+  border-color: var(--secondary-fixed-dim);
+  animation: draft-card-pulse 1.2s ease-in-out infinite;
+}
+@keyframes draft-card-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

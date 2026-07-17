@@ -203,6 +203,7 @@ export async function loadCampaigns() {
   for (const c of campaigns) {
     const div = document.createElement("div");
     div.className = "conv-item" + (c.id === state.currentCampaignId ? " active" : "");
+    div.dataset.campaignId = c.id;
     div.onclick = () => openCampaignDetail(c.id);
 
     const color = STATUS_COLORS[c.status] || "#888";
@@ -214,6 +215,30 @@ export async function loadCampaigns() {
       <div class="conv-preview">${c.sent || 0}/${c.total || 0} enviados</div>
     `;
     container.appendChild(div);
+  }
+}
+
+// Atualização in-place dos contadores via evento campaign_progress do WS,
+// sem re-fetch do detalhe nem da lista
+export function updateCampaignProgress(data) {
+  const sent = data.sent_count ?? 0;
+  const failed = data.failed_count ?? 0;
+  const pending = data.pending_count ?? 0;
+  const total = sent + failed + pending;
+
+  const detail = document.getElementById("campaign-detail");
+  if (state.currentCampaignId === data.campaign_id && detail && detail.style.display !== "none") {
+    document.getElementById("campaign-sent-count").textContent = `✓ ${sent} enviados`;
+    document.getElementById("campaign-failed-count").textContent = `✗ ${failed} falharam`;
+    document.getElementById("campaign-pending-count").textContent = `… ${pending} pendentes`;
+    const pct = Math.round((sent / (total || 1)) * 100);
+    document.getElementById("campaign-progress-bar").style.width = pct + "%";
+  }
+
+  const item = document.querySelector(`#campaign-items .conv-item[data-campaign-id="${data.campaign_id}"]`);
+  if (item) {
+    const preview = item.querySelector(".conv-preview");
+    if (preview) preview.textContent = `${sent}/${total} enviados`;
   }
 }
 

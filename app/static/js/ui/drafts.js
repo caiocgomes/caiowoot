@@ -1,6 +1,7 @@
 import state from '../state.js';
 import { getConversation, regenerateDraftApi } from '../api.js';
 import { loadSuggestedAttachment } from './compose.js';
+import { showToast } from './toast.js';
 
 export function showDraftLoading() {
   const container = document.getElementById("draft-cards-container");
@@ -9,7 +10,74 @@ export function showDraftLoading() {
   container.style.display = "block";
 }
 
+// Timer único de segurança: se o WS não entregar drafts_ready/drafts_error,
+// um GET ressincroniza a conversa aberta.
+let draftsFallbackTimer = null;
+
+function setRegenButtonsDisabled(disabled) {
+  const regenAllBtn = document.getElementById("regen-all-btn");
+  if (regenAllBtn) regenAllBtn.disabled = disabled;
+  const regenInstructionBtn = document.getElementById("regen-instruction-btn");
+  if (regenInstructionBtn) regenInstructionBtn.disabled = disabled;
+  document.querySelectorAll(".draft-card-actions button").forEach(btn => {
+    btn.disabled = disabled;
+  });
+}
+
+export function setDraftsGenerating(draftIndex = null) {
+  state.draftsGenerating = true;
+  if (draftIndex === null || draftIndex === undefined) {
+    showDraftLoading();
+  } else {
+    const card = document.querySelector(`.draft-card[data-index="${draftIndex}"]`);
+    if (card) card.classList.add("loading");
+    else showDraftLoading();
+  }
+  setRegenButtonsDisabled(true);
+  clearTimeout(draftsFallbackTimer);
+  draftsFallbackTimer = setTimeout(() => {
+    draftsFallbackTimer = null;
+    if (state.draftsGenerating) refreshCurrentConversationDrafts();
+  }, 30000);
+}
+
+export function clearDraftsGenerating() {
+  state.draftsGenerating = false;
+  clearTimeout(draftsFallbackTimer);
+  draftsFallbackTimer = null;
+  document.querySelectorAll(".draft-card.loading").forEach(card => card.classList.remove("loading"));
+  setRegenButtonsDisabled(false);
+}
+
+// Ressincronização pontual (1 GET) da conversa aberta — usada pelo fallback
+// de 30s e pela reconexão do WS.
+export async function refreshCurrentConversationDrafts() {
+  const convId = state.currentConversationId;
+  if (!convId) return;
+  const res = await getConversation(convId);
+  if (!res.ok) return;
+  if (convId !== state.currentConversationId) return;
+  const data = await res.json();
+  if (data.pending_drafts && data.pending_drafts.length > 0) {
+    showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
+  } else {
+    clearDraftsGenerating();
+  }
+}
+
+export function restoreDraftsAfterError(message) {
+  clearDraftsGenerating();
+  if (state.currentDrafts.length > 0) {
+    showDrafts(state.currentDrafts, state.currentDraftGroupId);
+  } else {
+    document.getElementById("draft-cards").innerHTML = "";
+    document.getElementById("draft-cards-container").style.display = "none";
+  }
+  showToast(message, "error");
+}
+
 export function showDrafts(drafts, groupId) {
+  clearDraftsGenerating();
   state.currentDrafts = drafts;
   state.currentDraftGroupId = groupId;
   state.selectedDraftIndex = null;
@@ -113,55 +181,46 @@ export function selectDraft(index) {
   });
 }
 
-export async function pollForUpdatedDrafts(convId) {
-  // Poll until drafts change (max 15s)
-  const oldTexts = state.currentDrafts.map(d => d.draft_text).join("|");
-  for (let i = 0; i < 15; i++) {
-    await new Promise(r => setTimeout(r, 1000));
-    if (convId !== state.currentConversationId) return;
-    const res = await getConversation(convId);
-    const data = await res.json();
-    if (data.pending_drafts && data.pending_drafts.length > 0) {
-      const newTexts = data.pending_drafts.map(d => d.draft_text).join("|");
-      if (newTexts !== oldTexts) {
-        console.log("Poll: drafts updated after", i + 1, "seconds");
-        showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
-        return;
-      }
-    }
-  }
-}
-
 export async function regenerateDraft(index) {
   if (!state.currentConversationId) return;
+  if (state.draftsGenerating) return;
   const triggerId = state.currentDrafts[0]?.trigger_message_id || state.lastTriggerMessageId;
   if (!triggerId) return;
   state.regenerationCount++;
   const instruction = document.getElementById("instruction-input").value.trim() || null;
-  const convId = state.currentConversationId;
 
-  await regenerateDraftApi(state.currentConversationId, {
-    draft_index: index,
-    operator_instruction: instruction,
-    trigger_message_id: triggerId,
-  });
-
-  pollForUpdatedDrafts(convId);
+  // Feedback otimista: loading antes do await; o resultado chega via WS
+  setDraftsGenerating(index);
+  try {
+    const res = await regenerateDraftApi(state.currentConversationId, {
+      draft_index: index,
+      operator_instruction: instruction,
+      trigger_message_id: triggerId,
+    });
+    if (!res.ok) restoreDraftsAfterError("Erro ao regenerar sugestões");
+  } catch (e) {
+    restoreDraftsAfterError("Erro ao regenerar sugestões");
+  }
 }
 
 export async function regenerateAll() {
   if (!state.currentConversationId) return;
+  if (state.draftsGenerating) return;
   const triggerId = state.currentDrafts[0]?.trigger_message_id || state.lastTriggerMessageId;
   if (!triggerId) return;
   state.regenerationCount++;
   const instruction = document.getElementById("instruction-input").value.trim() || null;
-  const convId = state.currentConversationId;
 
-  await regenerateDraftApi(state.currentConversationId, {
-    draft_index: null,
-    operator_instruction: instruction,
-    trigger_message_id: triggerId,
-  });
-
-  pollForUpdatedDrafts(convId);
+  // Feedback otimista: loading antes do await; o resultado chega via WS
+  setDraftsGenerating(null);
+  try {
+    const res = await regenerateDraftApi(state.currentConversationId, {
+      draft_index: null,
+      operator_instruction: instruction,
+      trigger_message_id: triggerId,
+    });
+    if (!res.ok) restoreDraftsAfterError("Erro ao regenerar sugestões");
+  } catch (e) {
+    restoreDraftsAfterError("Erro ao regenerar sugestões");
+  }
 }

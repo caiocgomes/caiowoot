@@ -62,3 +62,20 @@ export function autoResize(el) {
   el.style.height = "auto";
   el.style.height = Math.min(el.scrollHeight, maxH) + "px";
 }
+
+// Estado de loading padronizado para botões: desabilita, mostra spinner
+// (.btn-loading) e restaura o label original ao terminar.
+export function setBtnLoading(btn, on, label) {
+  if (!btn) return;
+  if (on) {
+    if (!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.classList.add("btn-loading");
+    if (label) btn.textContent = label;
+  } else {
+    btn.disabled = false;
+    btn.classList.remove("btn-loading");
+    btn.textContent = label || btn.dataset.originalLabel || btn.textContent;
+    delete btn.dataset.originalLabel;
+  }
+}

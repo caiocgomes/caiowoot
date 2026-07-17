@@ -2,7 +2,7 @@ import state from '../state.js';
 import { escapeHtml, formatTime, isMobile } from '../utils.js';
 import { getConversations, getConversation } from '../api.js';
 import { appendMessage } from './messages.js';
-import { showDrafts } from './drafts.js';
+import { showDrafts, setDraftsGenerating, clearDraftsGenerating } from './drafts.js';
 import { loadScheduledSends } from './schedule.js';
 import { renderContextPanel, classifyConversation } from './context-panel.js';
 
@@ -26,6 +26,45 @@ export async function loadConversations() {
   renderConversationList(conversations);
 }
 
+// Debounce trailing (500ms) com proteção anti-sobreposição: colapsa rajadas
+// de eventos WS em um único GET da lista.
+let loadTimer = null;
+let loadInFlight = false;
+let loadDirty = false;
+
+export function scheduleLoadConversations() {
+  clearTimeout(loadTimer);
+  loadTimer = setTimeout(async () => {
+    loadTimer = null;
+    if (loadInFlight) {
+      loadDirty = true;
+      return;
+    }
+    loadInFlight = true;
+    try {
+      await loadConversations();
+    } finally {
+      loadInFlight = false;
+      if (loadDirty) {
+        loadDirty = false;
+        scheduleLoadConversations();
+      }
+    }
+  }, 500);
+}
+
+// Marca a conversa ativa in-place no DOM, sem re-fetch da lista
+export function markConversationActive(id) {
+  document.querySelectorAll("#conversation-list .conv-item").forEach(item => {
+    const isActive = item.dataset.id === String(id);
+    item.classList.toggle("active", isActive);
+    if (isActive) {
+      item.classList.remove("is-new", "needs-reply");
+      item.querySelector(".conv-new-dot")?.remove();
+    }
+  });
+}
+
 export function renderConversationList(conversations) {
   const list = document.getElementById("conversation-list");
   list.innerHTML = "";
@@ -38,6 +77,7 @@ export function renderConversationList(conversations) {
       (conv.is_new ? " is-new" : conv.needs_reply ? " needs-reply" : "") +
       (conv.is_qualified === 0 ? " qualifying" : "") +
       (conv.has_scheduled ? " has-scheduled" : "");
+    div.dataset.id = conv.id;
     div.onclick = () => { openConversation(conv.id); closeSidebar(); };
 
     const name = conv.contact_name || conv.phone_number;
@@ -114,8 +154,12 @@ export async function openConversation(id) {
   document.getElementById("justification").textContent = "";
   document.getElementById("draft-cards-container").style.display = "none";
   document.getElementById("attachment-bar").style.display = "none";
+  clearDraftsGenerating();
 
-  if (data.pending_drafts && data.pending_drafts.length > 0) {
+  // Conversa com geração em andamento: loading em vez de drafts obsoletos
+  if (state.generatingConvs.has(id)) {
+    setDraftsGenerating(null);
+  } else if (data.pending_drafts && data.pending_drafts.length > 0) {
     showDrafts(data.pending_drafts, data.pending_drafts[0].draft_group_id);
   }
 
@@ -138,8 +182,9 @@ export async function openConversation(id) {
 
   // Auto-classify if no funnel data exists yet
   if (!conv.funnel_product && !conv.funnel_stage) {
+    document.getElementById("ctx-summary-text").textContent = "Analisando conversa...";
     classifyConversation();
   }
 
-  loadConversations();
+  markConversationActive(id);
 }
