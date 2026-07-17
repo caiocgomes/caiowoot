@@ -20,8 +20,8 @@ CLASSIFY_TOOL = {
             },
             "product": {
                 "type": ["string", "null"],
-                "enum": ["curso-llm", "curso-zero-a-analista", "curso-cdo", "ai-para-influencers", None],
-                "description": "Identificador do produto. Mapeamento: 'curso-llm' = O Senhor das LLMs, 'curso-zero-a-analista' = Do Zero a Analista (curso para iniciantes), 'curso-cdo' = De Analista a CDO (curso para quem já é analista), 'ai-para-influencers' = AI para Influencers. Use null se não identificado.",
+                "enum": ["curso-llm", "curso-zero-a-analista", "curso-cdo", "ai-para-influencers", "curso-ab-test", None],
+                "description": "Identificador do produto. Mapeamento: 'curso-llm' = O Senhor das LLMs, 'curso-zero-a-analista' = Do Zero a Analista (curso para iniciantes), 'curso-cdo' = De Analista a CDO (curso para quem já é analista), 'ai-para-influencers' = AI para Influencers, 'curso-ab-test' = Introdução a A/B Test. Use null se não identificado.",
             },
             "stage": {
                 "type": ["string", "null"],
