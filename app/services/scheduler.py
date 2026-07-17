@@ -14,6 +14,16 @@ async def _process_due_sends():
     """Find and send all due scheduled messages."""
     db = await get_db()
     try:
+        # Tick sem nada devido não escreve: checagem barata antes do UPDATE
+        row = await db.execute(
+            """SELECT 1 FROM scheduled_sends
+               WHERE status = 'pending'
+                 AND replace(send_at, 'T', ' ') <= datetime('now')
+               LIMIT 1"""
+        )
+        if not await row.fetchone():
+            return
+
         # Atomically transition pending -> sending for due messages
         await db.execute(
             """UPDATE scheduled_sends

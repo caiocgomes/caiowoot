@@ -14,7 +14,7 @@ POLL_INTERVAL = 10  # seconds
 MAX_CONSECUTIVE_FAILURES = 5
 
 
-async def _recompress_image(image_path: str) -> tuple[str, str]:
+def _recompress_image_sync(image_path: str) -> tuple[str, str]:
     """Recompress JPEG with random quality to vary hash. Returns (base64_data, mime_type)."""
     from PIL import Image
 
@@ -28,6 +28,11 @@ async def _recompress_image(image_path: str) -> tuple[str, str]:
     img.save(buf, format="JPEG", quality=quality)
     b64 = base64.b64encode(buf.getvalue()).decode()
     return b64, "image/jpeg"
+
+
+async def _recompress_image(image_path: str) -> tuple[str, str]:
+    """Recompressão PIL é CPU-bound; roda fora do thread do event loop."""
+    return await asyncio.to_thread(_recompress_image_sync, image_path)
 
 
 async def _pick_variation(db, campaign_id: int, exclude_variation_id: int | None = None):

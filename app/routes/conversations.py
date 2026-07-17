@@ -63,12 +63,16 @@ async def list_conversations(db: aiosqlite.Connection = Depends(get_db_connectio
 
 @router.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: int, db: aiosqlite.Connection = Depends(get_db_connection)):
-    # Mark as read
-    await db.execute(
-        "UPDATE conversations SET last_read_at = CURRENT_TIMESTAMP WHERE id = ?",
+    # Marca como lida com throttle de 30s: evita write + fsync em todo GET
+    cursor = await db.execute(
+        """UPDATE conversations
+           SET last_read_at = CURRENT_TIMESTAMP
+           WHERE id = ?
+             AND (last_read_at IS NULL OR last_read_at < datetime('now', '-30 seconds'))""",
         (conversation_id,),
     )
-    await db.commit()
+    if cursor.rowcount:
+        await db.commit()
 
     # Get conversation
     row = await db.execute(

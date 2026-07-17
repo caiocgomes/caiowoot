@@ -91,13 +91,13 @@ async def test_conversation_detail_no_drafts(client, db):
 async def test_full_flow(client, db, mock_evolution_api, mock_claude_api):
     """Fluxo completo: webhook → drafts → GET → send → edit_pair."""
     # 1. Receive webhook
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload(text="Quanto custa o CDO?")
         resp = await client.post("/webhook", json=payload)
     assert resp.status_code == 200
     conv_id = resp.json()["conversation_id"]
 
-    # 2. Generate drafts manually (since we mocked create_task)
+    # 2. Generate drafts manually (since we mocked spawn)
     from app.services.draft_engine import generate_drafts
     msg_id = resp.json()["message_id"]
     await generate_drafts(conv_id, msg_id)

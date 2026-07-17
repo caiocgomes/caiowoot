@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.config import now_local
 from app.database import get_db_connection
+from app.task_registry import spawn
 from app.services.rewarm_engine import (
     decide_rewarm_action,
     default_reference_date,
@@ -123,7 +124,7 @@ async def rewarm_preview(
 async def rewarm_execute(req: ExecuteRequest):
     """Dispara envio em batch em background e retorna 202 imediatamente."""
     items = [{"conversation_id": it.conversation_id, "message": it.message} for it in req.items]
-    task = asyncio.create_task(run_batch(items, sent_by="rewarm_reviewed"))
+    task = spawn(run_batch(items, sent_by="rewarm_reviewed"))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return Response(status_code=202)

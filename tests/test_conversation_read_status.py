@@ -6,7 +6,7 @@ from tests.conftest import make_webhook_payload
 
 async def _create_conversation_with_inbound(client, db):
     """Helper: create a conversation via webhook and return conversation_id."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload()
         await client.post("/webhook", json=payload)
 

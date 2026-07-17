@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 import aiosqlite
@@ -8,6 +7,7 @@ from starlette.requests import Request
 
 from app.auth import get_operator_from_request
 from app.database import get_db_connection
+from app.task_registry import spawn
 from app.models import RegenerateRequest, RewriteRequest
 from app.services.draft_engine import regenerate_draft
 from app.services.message_sender import send_and_record
@@ -82,7 +82,7 @@ async def regenerate(conversation_id: int, req: RegenerateRequest, request: Requ
     if not await row.fetchone():
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    asyncio.create_task(
+    spawn(
         regenerate_draft(
             conversation_id,
             req.trigger_message_id,
@@ -119,7 +119,7 @@ async def suggest_followup(conversation_id: int, request: Request, db: aiosqlite
 
     from app.services.draft_engine import generate_drafts
 
-    asyncio.create_task(
+    spawn(
         generate_drafts(conversation_id, last_msg_id, proactive=True, operator_name=operator)
     )
 

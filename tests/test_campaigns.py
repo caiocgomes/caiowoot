@@ -313,7 +313,7 @@ async def test_webhook_tags_conversation_with_campaign(client, db):
     await db.commit()
 
     # Simulate webhook from that phone number
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload(phone="5511999990001", text="Tenho interesse!", message_id="campaign-reply-1")
         response = await client.post("/webhook", json=payload)
         assert response.status_code == 200

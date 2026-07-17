@@ -1,6 +1,5 @@
 """Rotas do cold rewarm: preview (modal) e execute (dispara batch)."""
 
-import asyncio
 import logging
 
 import aiosqlite
@@ -9,11 +8,10 @@ from pydantic import BaseModel
 
 from app.database import get_db_connection
 from app.services.cold_triage import execute_batch, run_preview
+from app.task_registry import spawn
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-_background_tasks: set[asyncio.Task] = set()
 
 
 class ExecuteItem(BaseModel):
@@ -47,7 +45,5 @@ async def cold_rewarm_execute(req: ExecuteRequest):
     if not items:
         return Response(status_code=202)
 
-    task = asyncio.create_task(execute_batch(items))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    spawn(execute_batch(items))
     return Response(status_code=202)

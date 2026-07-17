@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 
@@ -7,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import settings
 from app.database import get_db_connection
+from app.task_registry import spawn
 from app.services.auto_qualifier import auto_qualify_respond
 from app.services.draft_engine import generate_drafts
 from app.services.cold_triage import mark_cold_response_received
@@ -151,14 +151,14 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
     # Route: auto-qualify new leads or generate drafts for qualified conversations
     logger.info("Routing conv %d: is_qualified=%s", conversation_id, is_qualified)
     if not is_qualified:
-        asyncio.create_task(auto_qualify_respond(conversation_id, msg_id))
+        spawn(auto_qualify_respond(conversation_id, msg_id))
     else:
-        asyncio.create_task(generate_drafts(conversation_id, msg_id))
+        spawn(generate_drafts(conversation_id, msg_id))
 
     # Reward hook: se há dispatch de rewarm aberto, classifica e grava reward
-    asyncio.create_task(handle_reward_inbound(conversation_id, msg_id))
+    spawn(handle_reward_inbound(conversation_id, msg_id))
     # Cold response hook: se há cold_dispatch recente, marca responded_at
-    asyncio.create_task(mark_cold_response_received(conversation_id, msg_id))
+    spawn(mark_cold_response_received(conversation_id, msg_id))
 
     # Notify connected WebSocket clients
     from app.websocket_manager import manager

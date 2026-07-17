@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from app.config import settings
@@ -76,9 +77,10 @@ async def generate_annotation(
             )
             await db.commit()
 
-            # Index in ChromaDB for future retrieval
+            # Indexação ChromaDB é síncrona (embedding + I/O); roda fora do event loop
             if situation_summary:
-                index_edit_pair(
+                await asyncio.to_thread(
+                    index_edit_pair,
                     edit_pair_id=edit_pair_id,
                     situation_summary=situation_summary,
                     was_edited=was_edited,

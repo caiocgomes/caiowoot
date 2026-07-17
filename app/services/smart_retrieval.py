@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from app.database import get_chroma_collection, get_db
@@ -80,33 +81,37 @@ def retrieve_similar(situation_summary: str, k: int = 5) -> list[int]:
     return validated_ids[:k]
 
 
-async def rebuild_index():
+def _rebuild_index_sync(pairs) -> None:
+    """Reconstrói a collection a partir dos pares. Roda via to_thread."""
     collection = get_chroma_collection()
 
     existing = collection.get()
     if existing["ids"]:
         collection.delete(ids=existing["ids"])
 
+    for pair in pairs:
+        collection.upsert(
+            ids=[str(pair["id"])],
+            documents=[pair["situation_summary"]],
+            metadatas=[{
+                "edit_pair_id": pair["id"],
+                "was_edited": bool(pair["was_edited"]),
+                "validated": bool(pair["validated"]),
+                "rejected": bool(pair["rejected"]),
+                "approach_selected": "",
+            }],
+        )
+
+
+async def rebuild_index():
     db = await get_db()
     try:
         rows = await db.execute(
             "SELECT id, situation_summary, was_edited, validated, rejected FROM edit_pairs WHERE situation_summary IS NOT NULL"
         )
         pairs = await rows.fetchall()
-
-        for pair in pairs:
-            collection.upsert(
-                ids=[str(pair["id"])],
-                documents=[pair["situation_summary"]],
-                metadatas=[{
-                    "edit_pair_id": pair["id"],
-                    "was_edited": bool(pair["was_edited"]),
-                    "validated": bool(pair["validated"]),
-                    "rejected": bool(pair["rejected"]),
-                    "approach_selected": "",
-                }],
-            )
-
-        logger.info("Rebuilt ChromaDB index with %d edit pairs", len(pairs))
     finally:
         await db.close()
+
+    await asyncio.to_thread(_rebuild_index_sync, pairs)
+    logger.info("Rebuilt ChromaDB index with %d edit pairs", len(pairs))

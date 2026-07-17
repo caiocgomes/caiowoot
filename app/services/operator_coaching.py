@@ -204,9 +204,10 @@ async def _process_analysis(db, run_id: int, period_start: str, period_end: str)
                     json.dumps(_aggregate_metrics(op_assessments), ensure_ascii=False),
                 ),
             )
+            # Commit por operador: a próxima iteração chama LLM e não pode segurar write txn
+            await db.commit()
         except Exception:
             logger.exception("Failed to generate digest for operator %s", operator_name)
-    await db.commit()
 
     # Save unanswered as JSON in a special operator_digest entry
     if unanswered:

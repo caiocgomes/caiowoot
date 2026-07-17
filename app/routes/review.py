@@ -1,3 +1,5 @@
+import asyncio
+
 import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -69,7 +71,7 @@ async def validate_annotation(edit_pair_id: int, db: aiosqlite.Connection = Depe
     await db.commit()
 
     try:
-        update_metadata(edit_pair_id, validated=True, rejected=False)
+        await asyncio.to_thread(update_metadata, edit_pair_id, validated=True, rejected=False)
     except Exception:
         pass
 
@@ -89,7 +91,7 @@ async def reject_annotation(edit_pair_id: int, db: aiosqlite.Connection = Depend
     await db.commit()
 
     try:
-        update_metadata(edit_pair_id, validated=True, rejected=True)
+        await asyncio.to_thread(update_metadata, edit_pair_id, validated=True, rejected=True)
     except Exception:
         pass
 
@@ -117,7 +119,7 @@ async def promote_annotation(edit_pair_id: int, db: aiosqlite.Connection = Depen
     await db.commit()
 
     try:
-        update_metadata(edit_pair_id, validated=True, rejected=False)
+        await asyncio.to_thread(update_metadata, edit_pair_id, validated=True, rejected=False)
     except Exception:
         pass
 

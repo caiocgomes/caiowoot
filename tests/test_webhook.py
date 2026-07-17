@@ -7,7 +7,7 @@ from tests.conftest import make_webhook_payload
 @pytest.mark.asyncio
 async def test_text_message_persisted(client, db):
     """12.1: mensagem de texto recebida persiste no banco."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload()
         resp = await client.post("/webhook", json=payload)
 
@@ -39,7 +39,7 @@ async def test_status_update_ignored(client, db):
 @pytest.mark.asyncio
 async def test_duplicate_message_ignored(client, db):
     """12.3: mensagem duplicada retorna 200 e não duplica."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload()
         await client.post("/webhook", json=payload)
         resp = await client.post("/webhook", json=payload)
@@ -56,7 +56,7 @@ async def test_duplicate_message_ignored(client, db):
 @pytest.mark.asyncio
 async def test_new_phone_creates_conversation(client, db):
     """12.4: primeira mensagem de um phone novo cria conversation + message."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload(phone="5511888888888", push_name="João")
         resp = await client.post("/webhook", json=payload)
 
@@ -71,7 +71,7 @@ async def test_new_phone_creates_conversation(client, db):
 @pytest.mark.asyncio
 async def test_existing_phone_appends_message(client, db):
     """12.5: mensagem de phone existente adiciona à conversation existente."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload1 = make_webhook_payload(message_id="msg-1", text="Oi")
         await client.post("/webhook", json=payload1)
 
@@ -111,7 +111,7 @@ async def test_message_triggers_draft_generation(client, db, mock_claude_api):
 async def test_inbound_message_cancels_pending_scheduled_sends(client, db):
     """Mensagem inbound cancela scheduled_sends pendentes da conversa."""
     # Setup: create conversation and scheduled sends
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload(message_id="msg-setup", text="Oi")
         await client.post("/webhook", json=payload)
 
@@ -133,7 +133,7 @@ async def test_inbound_message_cancels_pending_scheduled_sends(client, db):
     await db.commit()
 
     # Client sends a new message → should cancel pending scheduled sends
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload(message_id="msg-reply", text="Voltei!")
         resp = await client.post("/webhook", json=payload)
 

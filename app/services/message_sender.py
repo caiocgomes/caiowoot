@@ -1,12 +1,25 @@
 import asyncio
 import json
 import logging
+import os
+from pathlib import Path
 
+from app.config import settings
 from app.services.evolution import send_text_message, send_media_message, send_document_message
 from app.services.strategic_annotation import generate_annotation
+from app.task_registry import spawn
 from app.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
+
+
+def _write_attachment_sync(msg_id: int, filename: str, file_bytes: bytes) -> str:
+    """Grava o anexo em disco e retorna o caminho. Roda via to_thread."""
+    attachments_dir = Path(settings.database_path).parent / "attachments"
+    os.makedirs(attachments_dir, exist_ok=True)
+    file_path = attachments_dir / f"{msg_id}_{filename}"
+    file_path.write_bytes(file_bytes)
+    return str(file_path)
 
 
 async def send_and_record(
@@ -61,21 +74,6 @@ async def send_and_record(
         (conv_id, text, media_url, media_type, operator),
     )
     msg_id = cursor.lastrowid
-
-    # Save attachment file to disk if present
-    if file_bytes and filename:
-        import os
-        from pathlib import Path
-        from app.config import settings
-        attachments_dir = Path(settings.database_path).parent / "attachments"
-        os.makedirs(attachments_dir, exist_ok=True)
-        file_path = attachments_dir / f"{msg_id}_{filename}"
-        file_path.write_bytes(file_bytes)
-        media_url = str(file_path)
-        await db.execute(
-            "UPDATE messages SET media_url = ? WHERE id = ?",
-            (media_url, msg_id),
-        )
 
     await db.execute(
         "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -144,9 +142,18 @@ async def send_and_record(
 
     await db.commit()
 
+    # Gravação do anexo fora da transação: I/O de disco não segura o write lock
+    if file_bytes and filename:
+        media_url = await asyncio.to_thread(_write_attachment_sync, msg_id, filename, file_bytes)
+        await db.execute(
+            "UPDATE messages SET media_url = ? WHERE id = ?",
+            (media_url, msg_id),
+        )
+        await db.commit()
+
     # Fire-and-forget strategic annotation in background
     if edit_pair_id and draft:
-        asyncio.create_task(
+        spawn(
             generate_annotation(
                 edit_pair_id=edit_pair_id,
                 customer_message=customer_message,

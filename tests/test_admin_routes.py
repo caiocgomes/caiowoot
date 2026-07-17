@@ -52,7 +52,7 @@ async def test_admin_analysis_trigger_returns_run_id(client, admin_db):
         mock_get_db.return_value = admin_db
 
         # Mock the background task to not actually run
-        with patch("app.routes.admin.asyncio.create_task"):
+        with patch("app.routes.admin.spawn"):
             resp = await client.post(
                 "/admin/analysis/run",
                 json={"period_start": "2026-03-01", "period_end": "2026-03-07"},

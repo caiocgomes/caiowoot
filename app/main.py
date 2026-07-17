@@ -45,15 +45,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CaioWoot", lifespan=lifespan)
 
 
-class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+class StaticCacheMiddleware(BaseHTTPMiddleware):
+    """HTML, raiz e service worker revalidam sempre; js/css usam cache curto com SWR."""
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.endswith((".js", ".css", ".html")) or request.url.path == "/":
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        path = request.url.path
+        if path.endswith(".html") or path == "/" or path.endswith("/sw.js"):
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "private, max-age=300, stale-while-revalidate=600"
         return response
 
 
-app.add_middleware(NoCacheStaticMiddleware)
+app.add_middleware(StaticCacheMiddleware)
 app.add_middleware(AuthMiddleware)
 
 app.include_router(login.router)

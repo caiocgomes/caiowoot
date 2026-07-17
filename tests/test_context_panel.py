@@ -17,7 +17,7 @@ def _make_tool_use_response(summary="Resumo.", product=None, stage=None):
 
 async def _create_conversation_with_inbound(client, db):
     """Helper: create a conversation via webhook and return conversation_id."""
-    with patch("app.routes.webhook.asyncio.create_task"):
+    with patch("app.routes.webhook.spawn"):
         payload = make_webhook_payload()
         await client.post("/webhook", json=payload)
 
@@ -81,7 +81,7 @@ async def test_draft_generation_updates_funnel(client, db):
     # Simulate draft generation with structured summary that returns product/stage
     with patch("app.services.draft_engine.generate_situation_summary", new_callable=AsyncMock,
                return_value={"summary": "Cliente quer CDO.", "product": "curso-cdo", "stage": "qualifying"}):
-        with patch("app.routes.webhook.asyncio.create_task"):
+        with patch("app.routes.webhook.spawn"):
             # Send another message to trigger draft generation path
             # Instead, directly call the update logic via PATCH
             pass

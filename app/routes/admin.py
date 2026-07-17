@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import aiosqlite
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 
 from app.auth import get_operator_from_request, is_admin
 from app.database import get_db, get_db_connection
+from app.task_registry import spawn
 
 router = APIRouter()
 
@@ -69,7 +69,7 @@ async def trigger_analysis(request: Request, db: aiosqlite.Connection = Depends(
         finally:
             await bg_db.close()
 
-    asyncio.create_task(_run_in_background(run_id, period_start, period_end))
+    spawn(_run_in_background(run_id, period_start, period_end))
 
     return {"run_id": run_id, "status": "running", "period_start": period_start, "period_end": period_end}
 
