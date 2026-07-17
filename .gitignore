@@ -27,3 +27,6 @@ hello.py
 # macOS
 .DS_Store
 .gitnexus
+
+# spec-gen analysis artifacts
+.spec-gen/

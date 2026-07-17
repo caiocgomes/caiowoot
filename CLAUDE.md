@@ -16,28 +16,124 @@ uv sync                                                            # install dep
 
 ## Architecture
 
-1. **Request flow**: Evolution webhook → mensagem → `generate_drafts()` (3 variações paralelas) → WebSocket → operador envia
-2. **Learning loop**: edit_pairs → strategic annotation → ChromaDB indexing → few-shot retrieval em próximos drafts
-3. **Auto-qualifying**: bot estruturado com perguntas configuráveis, handoff automático após respostas ou 4 trocas
-4. **Campaigns**: outreach em massa com variações A/B, rate limiting, retry, anti-hash de imagem
-5. **Operator coaching**: análise periódica por conversa (erros factuais, engajamento, vendas recuperáveis) → digest por operador
-6. **Scheduled sends**: agendamento de mensagens com executor em background (polling 10s)
-7. **Prompt config**: prompts configuráveis via admin UI, hot-reload sem deploy
+Webhook Evolution $\rightarrow$ mensagem $\rightarrow$ qualifying bot (conversa nova) ou `generate_drafts()` (3 variações paralelas) $\rightarrow$ WebSocket $\rightarrow$ operador envia. Learning loop: edit_pairs $\rightarrow$ anotação estratégica $\rightarrow$ ChromaDB $\rightarrow$ few-shot nos próximos drafts. Background tasks: scheduler (sends agendados), campaign_executor (outreach A/B), operator_coaching (análise periódica).
 
-## Context routing
+## Routing
 
-| Área | Arquivo |
-|------|---------|
-| Services (22 módulos) | `.claude/rules/services.md` |
+| Contexto | Arquivo |
+|----------|---------|
+| Services (21 módulos) | `.claude/rules/services.md` |
 | Routes e endpoints | `.claude/rules/routes.md` |
-| Database e migrations | `.claude/rules/database.md` |
-| Testes e fixtures | `.claude/rules/testing.md` |
-| Frontend | `.claude/rules/frontend.md` |
+| Database, schema e migrations | `.claude/rules/database.md` |
+| Testes, fixtures e mocks | `.claude/rules/testing.md` |
+| Frontend (HTML/JS/CSS) | `.claude/rules/frontend.md` |
 
-## Common mistakes
+## Common Mistakes
 
-- **Editar prompts no draft_engine**: prompt construction foi movido para `prompt_builder.py`. draft_engine só orquestra.
+- **Editar prompts no draft_engine**: prompt construction está em `prompt_builder.py`. draft_engine só orquestra.
 - **Chamar Anthropic direto**: usar `claude_client.py` (`call_haiku`, `get_anthropic_client`). Nunca instanciar cliente direto.
-- **Esquecer patches de get_db nos testes**: cada módulo importa `get_db` diretamente. Patch precisa ser em cada módulo que usa, não só em `database.py`.
-- **Confundir qualifying com draft**: qualifying usa `auto_qualifier.py` com QUALIFY_TOOL, não o draft_engine. São fluxos separados.
+- **Patches de get_db nos testes**: cada módulo importa `get_db` diretamente. Patch em CADA módulo que usa, não só em `database.py`.
+- **Confundir qualifying com draft**: qualifying usa `auto_qualifier.py` com QUALIFY_TOOL, não o draft_engine. Fluxos separados.
 - **Ignorar background tasks**: scheduler e campaign_executor rodam como lifespan tasks. Testes que tocam envio devem mockar esses loops.
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **caiowoot** (5282 symbols, 8978 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## When Debugging
+
+1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
+2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
+3. `READ gitnexus://repo/caiowoot/process/{processName}` — trace the full execution flow step by step
+4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
+
+## When Refactoring
+
+- **Renaming**: MUST use `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` first. Review the preview — graph edits are safe, text_search edits need manual review. Then run with `dry_run: false`.
+- **Extracting/Splitting**: MUST run `gitnexus_context({name: "target"})` to see all incoming/outgoing refs, then `gitnexus_impact({target: "target", direction: "upstream"})` to find all external callers before moving code.
+- After any refactor: run `gitnexus_detect_changes({scope: "all"})` to verify only expected files changed.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Tools Quick Reference
+
+| Tool | When to use | Command |
+|------|-------------|---------|
+| `query` | Find code by concept | `gitnexus_query({query: "auth validation"})` |
+| `context` | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})` |
+| `impact` | Blast radius before editing | `gitnexus_impact({target: "X", direction: "upstream"})` |
+| `detect_changes` | Pre-commit scope check | `gitnexus_detect_changes({scope: "staged"})` |
+| `rename` | Safe multi-file rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
+| `cypher` | Custom graph queries | `gitnexus_cypher({query: "MATCH ..."})` |
+
+## Impact Risk Levels
+
+| Depth | Meaning | Action |
+|-------|---------|--------|
+| d=1 | WILL BREAK — direct callers/importers | MUST update these |
+| d=2 | LIKELY AFFECTED — indirect deps | Should test |
+| d=3 | MAY NEED TESTING — transitive | Test if critical path |
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/caiowoot/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/caiowoot/clusters` | All functional areas |
+| `gitnexus://repo/caiowoot/processes` | All execution flows |
+| `gitnexus://repo/caiowoot/process/{name}` | Step-by-step execution trace |
+
+## Self-Check Before Finishing
+
+Before completing any code modification task, verify:
+1. `gitnexus_impact` was run for all modified symbols
+2. No HIGH/CRITICAL risk warnings were ignored
+3. `gitnexus_detect_changes()` confirms changes match expected scope
+4. All d=1 (WILL BREAK) dependents were updated
+
+## Keeping the Index Fresh
+
+After committing code changes, the GitNexus index becomes stale. Re-run analyze to update it:
+
+```bash
+npx gitnexus analyze
+```
+
+If the index previously included embeddings, preserve them by adding `--embeddings`:
+
+```bash
+npx gitnexus analyze --embeddings
+```
+
+To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.embeddings` field shows the count (0 means no embeddings). **Running analyze without `--embeddings` will delete any previously generated embeddings.**
+
+> Claude Code users: A PostToolUse hook handles this automatically after `git commit` and `git merge`.
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->
