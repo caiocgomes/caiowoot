@@ -151,7 +151,22 @@ async def receive_webhook(request: Request, db: aiosqlite.Connection = Depends(g
     # Route: auto-qualify new leads or generate drafts for qualified conversations
     logger.info("Routing conv %d: is_qualified=%s", conversation_id, is_qualified)
     if not is_qualified:
-        spawn(auto_qualify_respond(conversation_id, msg_id))
+        from app.services.auto_qualifier import is_bot_enabled
+        if await is_bot_enabled(db):
+            spawn(auto_qualify_respond(conversation_id, msg_id))
+        else:
+            # Bot desligado: conversa nasce assumida e vai direto pro fluxo do operador
+            await db.execute(
+                "UPDATE conversations SET is_qualified = 1 WHERE id = ?",
+                (conversation_id,),
+            )
+            await db.commit()
+            from app.websocket_manager import manager as ws_manager
+            await ws_manager.broadcast(
+                conversation_id,
+                {"type": "conversation_assumed", "conversation_id": conversation_id},
+            )
+            spawn(generate_drafts(conversation_id, msg_id))
     else:
         spawn(generate_drafts(conversation_id, msg_id))
 

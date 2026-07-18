@@ -39,7 +39,7 @@ Webhook Evolution $\rightarrow$ mensagem $\rightarrow$ qualifying bot (conversa 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **caiowoot** (5282 symbols, 8978 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **caiowoot** (5427 symbols, 9337 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

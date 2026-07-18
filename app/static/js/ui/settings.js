@@ -98,6 +98,13 @@ export function renderSettingsTab(tab) {
     const prompts = state.settingsPrompts;
     body.innerHTML = `
       <div class="settings-field">
+        <label class="settings-checkbox-label">
+          <input type="checkbox" id="settings-qualifying-enabled" ${prompts.qualifying_bot_enabled === "true" ? "checked" : ""}>
+          Bot de auto-resposta ativo
+        </label>
+        <p class="settings-field-hint">Desligado, leads novos vão direto pro atendimento humano. Disparos automáticos podem causar bloqueio da conta pela Meta.</p>
+      </div>
+      <div class="settings-field">
         <label>Nome do atendente</label>
         <input type="text" id="settings-qualifying-attendant" value="${escapeHtml(prompts.qualifying_attendant_name || "")}" placeholder="Ex: Caio ou Bia">
       </div>
@@ -151,6 +158,7 @@ export async function saveSettings() {
       }
     } else if (state.settingsCurrentTab === "qualifying") {
       const updates = {
+        qualifying_bot_enabled: document.getElementById("settings-qualifying-enabled").checked ? "true" : "false",
         qualifying_attendant_name: document.getElementById("settings-qualifying-attendant").value,
         qualifying_greeting: document.getElementById("settings-qualifying-greeting").value,
         qualifying_questions: document.getElementById("settings-qualifying-questions").value,

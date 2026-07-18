@@ -87,6 +87,12 @@ HANDOFF:
     return prompt
 
 
+async def is_bot_enabled(db) -> bool:
+    """Lê o toggle do bot de auto-resposta (hot-reload via prompt_config)."""
+    prompts = await get_all_prompts(db)
+    return prompts.get("qualifying_bot_enabled") == "true"
+
+
 async def auto_qualify_respond(conversation_id: int, trigger_message_id: int | None = None):
     """Handle auto-qualifying response for a conversation."""
     db = await get_db()
@@ -98,6 +104,23 @@ async def auto_qualify_respond(conversation_id: int, trigger_message_id: int | N
         )
         conv = await row.fetchone()
         if not conv:
+            return
+        if not await is_bot_enabled(db):
+            # Bot desligado (pode ter virado entre o spawn e a execução): nunca enviar.
+            # Converte para assumida e cai pro fluxo normal de drafts do operador.
+            logger.info("Qualifying bot disabled, assuming conv %d (msg_id=%s)", conversation_id, trigger_message_id)
+            await db.execute(
+                "UPDATE conversations SET is_qualified = 1 WHERE id = ?",
+                (conversation_id,),
+            )
+            await db.commit()
+            await manager.broadcast(
+                conversation_id,
+                {"type": "conversation_assumed", "conversation_id": conversation_id},
+            )
+            if trigger_message_id:
+                from app.services.draft_engine import generate_drafts
+                await generate_drafts(conversation_id, trigger_message_id)
             return
         if conv["is_qualified"]:
             # Conversation was qualified between webhook read and now.

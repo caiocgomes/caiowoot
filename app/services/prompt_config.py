@@ -45,6 +45,8 @@ Se o operador aceitou sem editar:
 
 Responda em 2-3 frases, direto ao ponto. Apenas o texto da anotação, sem formatação.""",
     # --- Qualifying bot configs ---
+    # Desabilitado por padrão: disparo automático de mensagem é vetor de bloqueio da conta pela Meta
+    "qualifying_bot_enabled": "false",
     "qualifying_attendant_name": "Caio ou Bia",
     "qualifying_greeting": """Oi! Sou um assistente virtual do {attendant_name}. Ele já vai te atender!
 Enquanto isso, posso ir adiantando algumas coisas pra agilizar o papo. Me conta: qual curso te interessou?""",
