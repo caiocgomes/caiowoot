@@ -19,9 +19,19 @@ def make_qualify_response(message, ready_for_handoff=False, answers=None):
     return resp
 
 
+async def _set_bot_enabled(db, enabled=True):
+    """Grava o toggle do bot de auto-resposta em prompt_config (default do app é desabilitado)."""
+    await db.execute(
+        "INSERT OR REPLACE INTO prompt_config (key, value) VALUES ('qualifying_bot_enabled', ?)",
+        ("true" if enabled else "false",),
+    )
+    await db.commit()
+
+
 @pytest.mark.asyncio
 async def test_new_conversation_is_not_qualified(client, db):
-    """New conversations should have is_qualified = False."""
+    """New conversations should have is_qualified = False (com o bot ligado)."""
+    await _set_bot_enabled(db)
     with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock):
         res = await client.post("/webhook", json=make_webhook_payload())
         assert res.status_code == 200
@@ -34,10 +44,90 @@ async def test_new_conversation_is_not_qualified(client, db):
 @pytest.mark.asyncio
 async def test_webhook_routes_to_auto_qualifier(client, db):
     """Unqualified conversations should trigger auto_qualify_respond, not generate_drafts."""
+    await _set_bot_enabled(db)
     with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify:
         res = await client.post("/webhook", json=make_webhook_payload(phone="5511999990002"))
         assert res.status_code == 200
         mock_qualify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_webhook_bot_disabled_by_default_routes_to_drafts(client, db):
+    """Sem toggle gravado (default desabilitado), o webhook não aciona o bot: assume e gera drafts."""
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify, \
+         patch("app.routes.webhook.generate_drafts", new_callable=AsyncMock) as mock_drafts:
+        res = await client.post("/webhook", json=make_webhook_payload(phone="5511999990003"))
+        assert res.status_code == 200
+        mock_qualify.assert_not_called()
+        mock_drafts.assert_called_once()
+
+    row = await db.execute("SELECT is_qualified FROM conversations WHERE phone_number = '5511999990003'")
+    conv = await row.fetchone()
+    assert conv["is_qualified"] == 1, "com o bot desabilitado a conversa deve nascer assumida"
+
+
+@pytest.mark.asyncio
+async def test_webhook_bot_disabled_broadcasts_conversation_assumed(client, db):
+    """Ao converter conversa com bot desabilitado, o webhook emite conversation_assumed."""
+    import app.websocket_manager as ws_module
+
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock), \
+         patch("app.routes.webhook.generate_drafts", new_callable=AsyncMock):
+        res = await client.post("/webhook", json=make_webhook_payload(phone="5511999990004"))
+        assert res.status_code == 200
+
+    assumed = [
+        c for c in ws_module.manager.broadcast.call_args_list
+        if c.args[1].get("type") == "conversation_assumed"
+    ]
+    assert assumed, "evento conversation_assumed não foi emitido com o bot desabilitado"
+
+
+@pytest.mark.asyncio
+async def test_webhook_bot_disabled_explicit_false(client, db):
+    """Toggle gravado como 'false' também desliga o bot."""
+    await _set_bot_enabled(db, enabled=False)
+    with patch("app.routes.webhook.auto_qualify_respond", new_callable=AsyncMock) as mock_qualify, \
+         patch("app.routes.webhook.generate_drafts", new_callable=AsyncMock) as mock_drafts:
+        res = await client.post("/webhook", json=make_webhook_payload(phone="5511999990005"))
+        assert res.status_code == 200
+        mock_qualify.assert_not_called()
+        mock_drafts.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_auto_qualify_respond_disabled_does_not_send(client, db):
+    """Defesa em profundidade: auto_qualify_respond com bot desabilitado nunca envia mensagem."""
+    await db.execute(
+        "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
+        ("5511777770099", "Rita"),
+    )
+    await db.commit()
+    row = await db.execute("SELECT id FROM conversations WHERE phone_number = '5511777770099'")
+    conv = await row.fetchone()
+    conv_id = conv["id"]
+
+    cursor = await db.execute(
+        "INSERT INTO messages (conversation_id, direction, content) VALUES (?, 'inbound', ?)",
+        (conv_id, "Oi, quero saber sobre o curso"),
+    )
+    msg_id = cursor.lastrowid
+    await db.commit()
+
+    with patch("app.services.auto_qualifier.send_text_message", new_callable=AsyncMock) as mock_send, \
+         patch("app.services.auto_qualifier.manager") as mock_ws, \
+         patch("app.services.draft_engine.generate_drafts", new_callable=AsyncMock) as mock_drafts:
+        mock_ws.broadcast = AsyncMock()
+
+        from app.services.auto_qualifier import auto_qualify_respond
+        await auto_qualify_respond(conv_id, msg_id)
+
+        mock_send.assert_not_called()
+        mock_drafts.assert_called_once()
+
+    check = await db.execute("SELECT is_qualified FROM conversations WHERE id = ?", (conv_id,))
+    result = await check.fetchone()
+    assert result["is_qualified"] == 1, "conversa deve virar assumida quando o bot está desabilitado"
 
 
 @pytest.mark.asyncio
@@ -60,6 +150,7 @@ async def test_webhook_routes_to_drafts_when_qualified(client, db):
 @pytest.mark.asyncio
 async def test_auto_qualify_sends_bot_message(client, db):
     """auto_qualify_respond should send a message with sent_by='bot'."""
+    await _set_bot_enabled(db)
     # Create unqualified conversation with a message
     await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
@@ -109,6 +200,7 @@ async def test_auto_qualify_sends_bot_message(client, db):
 @pytest.mark.asyncio
 async def test_auto_qualify_handoff_sets_qualified(client, db):
     """When ready_for_handoff is True, is_qualified should be set to 1."""
+    await _set_bot_enabled(db)
     await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
         ("5511666660001", "Ana"),
@@ -190,6 +282,7 @@ async def test_conversations_list_includes_is_qualified(client, db):
 @pytest.mark.asyncio
 async def test_auto_qualify_returns_structured_answers(client, db):
     """Bot should return answers mapped to questions."""
+    await _set_bot_enabled(db)
     await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
         ("5511333330001", "Lucas"),
@@ -232,6 +325,7 @@ async def test_auto_qualify_returns_structured_answers(client, db):
 @pytest.mark.asyncio
 async def test_auto_qualify_handoff_when_all_answers_present(client, db):
     """Handoff should trigger when all answers are non-null."""
+    await _set_bot_enabled(db)
     await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
         ("5511222220001", "Fernanda"),
@@ -279,6 +373,7 @@ async def test_auto_qualify_handoff_when_all_answers_present(client, db):
 @pytest.mark.asyncio
 async def test_auto_qualify_force_handoff_includes_partial_answers(client, db):
     """Force handoff at 4 exchanges should include partial answers in summary."""
+    await _set_bot_enabled(db)
     await db.execute(
         "INSERT INTO conversations (phone_number, contact_name, is_qualified) VALUES (?, ?, 0)",
         ("5511111110001", "Roberto"),

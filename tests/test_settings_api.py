@@ -198,3 +198,29 @@ async def test_is_admin_endpoint_for_non_admin(non_admin_client):
     resp = await non_admin_client.get("/api/settings/is-admin")
     assert resp.status_code == 200
     assert resp.json()["is_admin"] is False
+
+
+# --- Toggle do bot de auto-resposta ---
+
+@pytest.mark.asyncio
+async def test_qualifying_bot_disabled_by_default(admin_client):
+    """O bot de auto-resposta nasce desabilitado (risco de bloqueio da Meta)."""
+    resp = await admin_client.get("/api/settings/prompts")
+    assert resp.status_code == 200
+    assert resp.json()["qualifying_bot_enabled"] == "false"
+
+
+@pytest.mark.asyncio
+async def test_qualifying_bot_toggle_roundtrip_and_reset(admin_client):
+    """Admin liga o bot, o valor persiste, e reset com null volta ao default desabilitado."""
+    resp = await admin_client.put(
+        "/api/settings/prompts",
+        json={"qualifying_bot_enabled": "true"},
+    )
+    assert resp.status_code == 200
+    resp = await admin_client.get("/api/settings/prompts")
+    assert resp.json()["qualifying_bot_enabled"] == "true"
+
+    await admin_client.put("/api/settings/prompts", json={"qualifying_bot_enabled": None})
+    resp = await admin_client.get("/api/settings/prompts")
+    assert resp.json()["qualifying_bot_enabled"] == "false"

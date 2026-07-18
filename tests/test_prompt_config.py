@@ -103,5 +103,6 @@ async def test_defaults_contain_all_expected_keys():
         "summary_prompt", "annotation_prompt",
         "qualifying_attendant_name", "qualifying_greeting",
         "qualifying_handoff", "qualifying_questions",
+        "qualifying_bot_enabled",
     }
     assert set(PROMPT_DEFAULTS.keys()) == expected_keys
