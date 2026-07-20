@@ -30,3 +30,8 @@ hello.py
 
 # spec-gen analysis artifacts
 .spec-gen/
+
+# Artefatos de runtime
+.coverage
+prompts/
+attachments/
