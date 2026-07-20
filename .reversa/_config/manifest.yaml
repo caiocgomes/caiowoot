@@ -1,0 +1,31 @@
+installation:
+  version: 1.2.20
+  installDate: 2026-05-03T18:53:39.841Z
+  lastUpdated: 2026-05-03T18:53:39.841Z
+
+engines:
+  - claude-code
+  - codex
+  - gemini-cli
+  - antigravity
+  - opencode
+
+agents:
+  - reversa
+  - reversa-scout
+  - reversa-archaeologist
+  - reversa-detective
+  - reversa-architect
+  - reversa-writer
+  - reversa-reviewer
+  - reversa-visor
+  - reversa-data-master
+  - reversa-design-system
+  - reversa-agents-help
+  - reversa-reconstructor
+  - reversa-migrate
+  - reversa-paradigm-advisor
+  - reversa-curator
+  - reversa-strategist
+  - reversa-designer
+  - reversa-inspector
